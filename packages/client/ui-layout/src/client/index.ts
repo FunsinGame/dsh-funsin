@@ -37,6 +37,13 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+/**
+ * The Workspace navigation owner reached by the embed frame's back control.
+ * Structural because this shell is applied before, and cannot depend on, the
+ * feature package that declares the `uiWorkspace` Context member.
+ */
+type WorkspaceNavigationOwner = ClientContext & { uiWorkspace: { clearSession(): void } }
+
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface GlobalStandardProps {
     /** Subscribe to the selected main panel independently of parent renders. */
@@ -94,8 +101,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 // OwnerShare contracts — the render-side share the slot owner supplies at
 // renderSlot. Registrants IMPORT these and compose their full component props
-// through the four-share intersection (PropsRuntime & PropsRenderSlots &
-// PropsStore & I). Conversation business state and actions arrive through
+// from the framework-derived shares. Conversation business state and actions arrive through
 // framework-standard hooks and each registrant's inject face, not owner props.
 
 /** Sidebar owner share: live column state from the frame's concession solve. */
@@ -120,7 +126,7 @@ export interface RightbarOwnerProps {
 }
 
 /** Required services (cordis fiber inject — the loader passes all module exports as an object plugin). */
-export const inject = ['slots', 'theme', 'sessions', 'locale']
+export const inject = ['slots', 'theme', 'locale']
 
 /**
  * Client plugin body: provide ctx.layout, then one register() call — AppFrame
@@ -130,6 +136,14 @@ export const inject = ['slots', 'theme', 'sessions', 'locale']
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
+  // The embed frame's back control clears the Workspace owner's main-Session
+  // selection. Workspace navigation is applied after this shell (it depends on
+  // the layout service), so the face resolves when that service appears.
+  let back: () => void = () => {}
+  ctx.inject(['uiWorkspace'], (workspaceCtx) => {
+    const owner = workspaceCtx as WorkspaceNavigationOwner
+    back = () => { owner.uiWorkspace.clearSession() }
+  })
   ctx.effect(() => {
     const handle = createLayoutStore()
     const instance = handle.create()
@@ -159,7 +173,7 @@ export function apply(ctx: ClientContext): void {
       // The frame's only business action: the embed layout's back control
       // clears the current selection. Panel actions reach the frame through the
       // store seat above, so it is the single member of the root inject face.
-      inject: () => ({ back: () => { ctx.sessions.clear() } }),
+      inject: () => ({ back }),
     }, AppFrame)
     const disposePanels = ctx.slots.subscribe('main', retainMainPanels)
     retainMainPanels()

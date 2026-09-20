@@ -1,7 +1,8 @@
 /** Registers the target-neutral Conversation assembly, shell, input, and docks. */
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { ISessions, SessionBinding } from '@deepseek-ai/dsh-api-session-controller/client'
+import { IconPaperclipOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { createSnapshotStore, type BoundActions } from '@deepseek-ai/dsh-client-store'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -29,6 +30,7 @@ import { queueDockEntry } from './queue/QueueDock.tsx'
 import { EnterBehaviorRow } from './settings/EnterBehaviorRow.tsx'
 import type { EnterBehaviorRowInjected } from './settings/EnterBehaviorRow.tsx'
 import { ConversationRoot } from './skeleton/ConversationRoot.tsx'
+import { ConversationContent } from './skeleton/ConversationContent.tsx'
 import { ConversationPanel } from './skeleton/ConversationPanel.tsx'
 import { ConversationSession, ConversationSessionHeader } from './skeleton/ConversationSession.tsx'
 import { InputBar } from './skeleton/InputBar.tsx'
@@ -91,6 +93,17 @@ interface WorkspaceNavigation {
     workspaceId: Parameters<ConversationInjected['selectWorkspace']>[0],
     beforeOpen: (sessionId: SessionId) => void,
   ): Promise<void>
+}
+
+/** Action registration used by the composer without importing its command-UI consumer. */
+interface FileCommandRegistry {
+  register(contribution: {
+    name: string
+    label(): string
+    icon: typeof IconPaperclipOutline16
+    available(session: { sessionId: SessionId }): boolean
+    ui: { kind: 'action'; run(session: { sessionId: SessionId }): void }
+  }): () => void
 }
 
 /** Resolve the session-scoped Conversation action face, failing loud. */
@@ -160,13 +173,15 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   const restoreView = (sessionId: SessionId): void => {
     activateView(sessionId, readConversationViewPreference(sessionId))
   }
-  const restoreCurrentView = (): void => {
-    const sessionId = sessions.list.getSnapshot().current
-    if (sessionId !== undefined && sessions.binding(sessionId) !== undefined) {
-      restoreView(sessionId)
-    }
-  }
   const conversationViews = createSnapshotStore<readonly ViewTab[]>(viewTabs())
+  const bindings = new Set<SessionBinding>()
+  const trackedBindings = new WeakSet<SessionBinding>()
+  const trackBinding = (binding: SessionBinding): void => {
+    if (trackedBindings.has(binding)) return
+    trackedBindings.add(binding)
+    bindings.add(binding)
+    binding.ctx.effect(() => () => { bindings.delete(binding) }, 'ui-conversation: active Provider binding')
+  }
   const refreshViews = (): void => {
     const current = conversationViews.getSnapshot()
     const next = viewTabs()
@@ -176,20 +191,12 @@ export function apply(ctx: Context, config: Config = Config({})): void {
         return candidate !== undefined && tab.id === candidate.id && tab.label === candidate.label
       })
     if (!unchanged) conversationViews.set(next)
-    restoreCurrentView()
+    for (const binding of bindings) restoreView(binding.sessionId)
   }
   ctx.effect(() => {
-    let currentSessionId = sessions.list.getSnapshot().current
     const disposeViews = slots.subscribe('conversation.view', refreshViews)
     const disposeLocale = ctx.locale.subscribe(refreshViews)
-    const disposeCurrent = sessions.list.subscribe(() => {
-      const nextSessionId = sessions.list.getSnapshot().current
-      if (nextSessionId === currentSessionId) return
-      currentSessionId = nextSessionId
-      restoreCurrentView()
-    })
     return () => {
-      disposeCurrent()
       disposeLocale()
       disposeViews()
     }
@@ -201,10 +208,24 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   ctx.effect(() => installEmbedInput({
     isEmbed: () => document.documentElement.dataset.dshEmbed === '1',
     pageToken: () => new URLSearchParams(window.location.search).get('token') ?? undefined,
-    currentSessionId: () => sessions.list.getSnapshot().current,
+    // The embed frame is a single main view, so the retained main-View Session
+    // is the one the extension's insert targets.
+    currentSessionId: () => Object.values(sessions.list.getSnapshot().byId)
+      .find(session => (session.retainedBy.mainView ?? 0) > 0)?.id,
     insertText: (sessionId, text) => { inputHub.shell(sessionId).paste(text) },
     sendResult: (result) => { window.parent.postMessage(result, '*') },
   }), 'ui-conversation: VS Code embed input')
+
+  ctx.inject(['commandUi'], (scope) => {
+    const commands = scope.get('commandUi') as FileCommandRegistry
+    scope.effect(() => commands.register({
+      name: 'file',
+      label: () => t('input.file'),
+      icon: IconPaperclipOutline16,
+      available: session => inputHub.canPickFiles(session.sessionId),
+      ui: { kind: 'action', run: (session) => { inputHub.pickFiles(session.sessionId) } },
+    }), 'ui-conversation: File action')
+  })
 
   // Conversation assembly and input share the Session binding lifecycle. The
   // source roster is installed before any consuming Slot entry.
@@ -212,6 +233,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     hooks: ['conversation', 'input'],
     props: ['inputActions'],
     resolve: (binding) => {
+      trackBinding(binding)
       const shell = inputHub.shellFor(binding)
       const conversation = uiConversation.binding(binding)
       restoreView(binding.sessionId)
@@ -227,16 +249,27 @@ export function apply(ctx: Context, config: Config = Config({})): void {
 
   const registerConversationRoot = () => slots.register({
     name: 'main.conversation',
+    children: {
+      'conversation.session.header': { kind: 'single', scope: 'session' },
+    },
+  }, ConversationRoot)
+
+  const registerConversationContent = () => slots.registerFactory({
+    name: 'conversation.content',
+    scope: 'session-maybe',
     locale: NS,
     children: {
       'conversation.session': { kind: 'single', scope: 'session' },
-      'conversation.session.header': { kind: 'single', scope: 'session' },
       'conversation.composer': { kind: 'chain', scope: 'session' },
       'conversation.composer.bar': { kind: 'single', scope: 'session-maybe' },
       'conversation.input.dock': { kind: 'list', scope: 'session' },
       'conversation.hero.brand.mark': { kind: 'single', scope: 'root' },
       'conversation.hero.workspace': { kind: 'single', scope: 'root' },
-      'conversation.hero.agentPreset': { kind: 'single', scope: 'root' },
+      'conversation.hero.agentPreset': { kind: 'single', scope: 'session-maybe' },
+    },
+    slots: {
+      views: { scope: 'session' },
+      widthControls: { scope: 'root' },
     },
     inject: (sessionId: SessionId | undefined): ConversationInjected => ({
       hooks: {
@@ -264,7 +297,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
         }
       }),
     }),
-  }, ConversationRoot)
+  }, ConversationContent)
 
   const registerConversationSession = () => slots.register({
     name: 'conversation.session',
@@ -287,6 +320,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     locale: NS,
     children: {
       'conversation.session.header.lineage': { kind: 'single', scope: 'session' },
+      'conversation.session.header.leading': { kind: 'single', scope: 'session' },
       'conversation.session.header.actions': { kind: 'list', scope: 'session' },
       'conversation.session.header.utilities': { kind: 'list', scope: 'session' },
       'conversation.session.header.corner': { kind: 'single', scope: 'session' },
@@ -308,6 +342,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     children: {
       'conversation.input.attachments': { kind: 'single', scope: 'session-maybe' },
       'conversation.input.overlay': { kind: 'list', scope: 'session' },
+      'conversation.input.permission': { kind: 'single', scope: 'session' },
       'conversation.input.left': { kind: 'list', scope: 'session' },
       'conversation.input.plan': { kind: 'single', scope: 'session' },
       'conversation.input.right': { kind: 'list', scope: 'session' },
@@ -324,7 +359,6 @@ export function apply(ctx: Context, config: Config = Config({})): void {
           retryFileUpload: undefined,
           toggleCommandMenu: undefined,
           stop: undefined,
-          command: undefined,
           hooks: {
             busyEnter: submissionPolicy.busyEnter,
             fileUploads: ABSENT_FILE_UPLOADS,
@@ -377,12 +411,6 @@ export function apply(ctx: Context, config: Config = Config({})): void {
             // Stop failure is published through Session promptError.
           })
         },
-        command: async (line) => {
-          const session = sessions.binding(sessionId)?.session
-          if (session === undefined) return false
-          const result = await session.command(line)
-          return result.ok && result.value.matched
-        },
         hooks: {
           busyEnter: submissionPolicy.busyEnter,
           fileUploads: conversation.fileUploads,
@@ -401,6 +429,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       children: { 'main.conversation': { kind: 'single', scope: 'session-maybe' } },
     }, ConversationPanel)
     yield registerConversationRoot()
+    yield registerConversationContent()
     yield registerConversationSession()
     yield registerConversationHeader()
     yield registerComposerBar()

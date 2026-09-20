@@ -61,9 +61,9 @@ async function bench() {
   // ui-theme's Appearance row binds a durable scope through these two.
   ctx.provide('remote', { $on: () => () => {} } as never)
   ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
-  // The embed layout injects the sessions service for its back action.
-  const sessions = { clear: vi.fn(), refresh: vi.fn() }
-  ctx.provide('sessions', sessions as never)
+  // The embed layout's back control clears the Workspace owner's selection.
+  const uiWorkspace = { clearSession: vi.fn() }
+  ctx.provide('uiWorkspace', uiWorkspace as never)
   await ctx.plugin({ inject: themeInject, apply: themeApply }).await()
   await slotsFiber.await()
   const slots = ctx.get('slots') as SlotRegistry
@@ -74,12 +74,12 @@ async function bench() {
     if (host === undefined) throw new Error('the root renderer did not receive its host')
     return host
   }
-  return { ctx, slots, sessions, rendererHost }
+  return { ctx, slots, uiWorkspace, rendererHost }
 }
 
 describe('ui-layout client apply', () => {
   it('declares its service dependencies', () => {
-    expect(inject).toEqual(['slots', 'theme', 'sessions', 'locale'])
+    expect(inject).toEqual(['slots', 'theme', 'locale'])
   })
 
   it('provides ctx.layout and declares the four root-scoped frame slots', async () => {
@@ -95,18 +95,16 @@ describe('ui-layout client apply', () => {
   })
 
   it('shares a pre-created instance between service actions, root rendering, and panelInfo', async () => {
-    const { ctx, slots, sessions, rendererHost } = await bench()
+    const { ctx, slots, uiWorkspace, rendererHost } = await bench()
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     const entry = slots.entries('root')[0]!
-    // The inject face's only member: the embed layout's back control.
-    const injectFace = entry.inject
-    expect(injectFace).toBeDefined()
-    const back = injectFace!().back
-    expect(typeof back).toBe('function')
-    const clear = back as () => void
-    clear()
-    expect(sessions.clear).toHaveBeenCalledOnce()
+    // The inject face's only member: the embed layout's back control, which
+    // resolves once the Workspace owner that holds main-Session selection exists.
+    const face = (): { back: () => void } => entry.inject!() as { back: () => void }
+    await vi.waitFor(() => { expect(face().back).toBeTypeOf('function') })
+    face().back()
+    expect(uiWorkspace.clearSession).toHaveBeenCalledOnce()
     const handle = entry.store as ReturnType<typeof createLayoutStore>
     const instance = handle.create()
     expect(handle.create()).toBe(instance)
