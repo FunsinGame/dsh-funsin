@@ -460,7 +460,16 @@ export interface ToolRuntimeScheduler {
  * Scheduler entry point omitted from the generated named service API.
  * @internal
  */
-export const TOOL_RUNTIME_SCHEDULER: unique symbol = Symbol('@deepseek-ai/dsh-tools.scheduler')
+// `Symbol.for` (not `Symbol`) on purpose: the Symbol is the key a caller uses
+// to reach the scheduler on a `ToolRuntime` instance, and a plain Symbol is
+// only equal to itself. This package is emitted twice (the `tsdown` runtime
+// entry at `lib/index.js` and the `tsc` type/consumer entry at
+// `lib/types/index.js`), so a non-registered Symbol would compare unequal
+// across the two copies and a caller holding one would read `undefined` from a
+// registry built with the other — surfacing as
+// `Cannot read properties of undefined (reading 'prepare')`. The global symbol
+// registry keeps every copy pointing at one key.
+export const TOOL_RUNTIME_SCHEDULER: unique symbol = Symbol.for('@deepseek-ai/dsh-tools.scheduler')
 
 /** Canonical error code for cancellation after a tool body was invoked. */
 export const TOOL_ABORTED = 'ABORTED'
