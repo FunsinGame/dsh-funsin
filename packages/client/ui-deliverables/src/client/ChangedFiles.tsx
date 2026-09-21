@@ -1,7 +1,10 @@
-/** The changed-files card: a header and per-file rows that open the turn's review, and a three-row fold. */
+/**
+ * The changed-files card: a header and per-file rows that open the turn's
+ * review — or, in the VS Code embed, the file itself — and a three-row fold.
+ */
 import { useState } from 'react'
 import { resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
-import { IconChevronDownOutline14, IconChevronUpOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronDownOutline14, IconChevronUpOutline14, isVscodeEmbed } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChangesSummary } from '../changes.ts'
 import { IconCodeBracketsOutline16 } from './icons.tsx'
@@ -23,22 +26,32 @@ function Counts({ added, deleted, t }: { added: number; deleted: number } & Prop
 
 /**
  * Render one turn's changed files. The header opens the turn's review in the
- * right Sidebar on its first file; each row opens it on that row's file.
- * @param props - the recorded summary, the review opener, and localized copy.
+ * right Sidebar on its first file; each row opens it on that row's file. The
+ * embedded layout has no right Sidebar and no review surface, so there a row
+ * opens the file itself in the VS Code window hosting the page.
+ * @param props - the recorded summary, the review opener, the file opener, and localized copy.
  * @returns the card.
  */
-export function ChangedFiles({ changes, cwd, openReview, t }: {
+export function ChangedFiles({ changes, cwd, openReview, openFile, t }: {
   /** The served summary with the sequence of the event that announced it. */
   changes: Pick<ChangesSummary, 'files' | 'total' | 'added' | 'deleted'> & { seq: number }
   cwd: string | undefined
   /** Open the turn's review on the file at an original summary index. */
   openReview: (index: number) => void
+  /** Open one changed file by path; used where no review surface exists. */
+  openFile: (path: string) => void
 } & PropsLocale<typeof NS>) {
   const [expanded, setExpanded] = useState(false)
   const foldable = changes.files.length > COLLAPSED_ROWS
   const rows = foldable && !expanded ? changes.files.slice(0, COLLAPSED_ROWS) : changes.files
+  const open = (index: number): void => {
+    const file = changes.files[index]
+    if (file === undefined) return
+    if (isVscodeEmbed()) openFile(resolveWorkspacePath(cwd, file.path))
+    else openReview(index)
+  }
   return <div className={css.card} data-changed-files>
-    <button type="button" className={css.header} aria-label={t('changes.openReview')} onClick={() => { openReview(0) }}>
+    <button type="button" className={css.header} aria-label={t('changes.openReview')} onClick={() => { open(0) }}>
       <span className={css.tile}><IconCodeBracketsOutline16 size={18} /></span>
       <span className={css.titles}>
         <span className={css.title}>{t('changes.title', { count: String(changes.total) })}</span>
@@ -50,7 +63,7 @@ export function ChangedFiles({ changes, cwd, openReview, t }: {
         <li key={file.display}>
           <button type="button" className={css.row} title={resolveWorkspacePath(cwd, file.path)}
             aria-label={t('changes.viewDiff', { name: file.display })}
-            onClick={() => { openReview(index) }}>
+            onClick={() => { open(index) }}>
             <span className={css.path}>{file.display}</span>
             <span className={css.counts}>
               {file.binary === true ? t('changes.binary')

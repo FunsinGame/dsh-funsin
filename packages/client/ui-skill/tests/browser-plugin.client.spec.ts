@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * ui-skill browser half: source and keyed toolview registration +
  * locale dictionaries + source duplicate-name proof +
@@ -455,6 +456,31 @@ describe('reference preview', () => {
     expect(source.lexicon!(session)).toBeUndefined()
     expect(listener).toHaveBeenCalledTimes(1)
     expect(openResource).not.toHaveBeenCalled()
+  })
+
+  it('opens a skill file in the VS Code window while embedded', async () => {
+    const { source, openResource } = await bench(listOk(rows))
+    const session = proj('preview')
+    const posted: Record<string, unknown>[] = []
+    const post = vi.spyOn(window.parent, 'postMessage').mockImplementation((message: unknown) => {
+      const command = message as Record<string, unknown>
+      posted.push(command)
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { source: 'dsh-vscode', type: 'open-file-result', id: command['id'], ok: true },
+        source: window,
+      }))
+    })
+    document.documentElement.dataset.dshEmbed = '1'
+    try {
+      expect(source.openReference!(session, { ref: '/review' })).toBe(true)
+      await vi.waitFor(() => { expect(posted).toHaveLength(1) })
+      // The embedded layout mounts no right Sidebar, so the chip goes to the editor window.
+      expect(openResource).not.toHaveBeenCalled()
+      expect(posted[0]).toMatchObject({ source: 'dsh-web', type: 'open-file', path: '/skills/review/SKILL.md' })
+    } finally {
+      delete document.documentElement.dataset.dshEmbed
+      post.mockRestore()
+    }
   })
 
   it('reports a failed preview fetch and allows the next click to retry', async () => {

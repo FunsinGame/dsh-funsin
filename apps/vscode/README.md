@@ -1,5 +1,7 @@
 # dsh-vscode
 
+English | [中文](README.zh.md)
+
 The DeepSeek Harness VS Code extension: it boots the harness `web` profile on a loopback port, bound to the open workspace, and embeds the full DeepSeek Harness GUI in the activity-bar view. Because the harness boots with the workspace as its working directory, the GUI's session list shows the current workspace's conversations; clicking a session opens its chat. The interface is the DeepSeek Harness web GUI itself, so it is identical to `dsh --profile web` — every feature and interaction included.
 
 ## How it works
@@ -9,12 +11,14 @@ The DeepSeek Harness VS Code extension: it boots the harness `web` profile on a 
 3. It spawns `dsh --profile web --host 127.0.0.1 --port <dsh.port> --no-open` (port `0` requests an OS-assigned port, and `--no-open` keeps the default browser closed) with the first workspace folder as its working directory, then waits for the `dsh web: http://127.0.0.1:<port>/?token=...` readiness line.
 4. The view renders that URL in a full-size iframe. `Open in Browser` hands the same URL to `vscode.env.openExternal`. In embedded mode (`DSH_VSCODE=1`) the harness keeps the launch token in the iframe URL and accepts it on `/api` calls and the WebSocket mux, so the sidebar does not depend on cross-origin cookies.
 5. The extension also starts a token-protected loopback bridge and passes `DSH_VSCODE=1`, `DSH_VSCODE_BRIDGE`, and `DSH_VSCODE_BRIDGE_TOKEN` to the child. Harness plugins that detect the embedded mode can call `POST /open-file` and `POST /open-diff` on that bridge to open files/diffs in the current VS Code window instead of spawning a separate `code` process.
+6. Clicking a file in a conversation opens it in this window: the embedded single-column layout mounts no right Sidebar, so the page posts an `open-file` message through the webview frame, and the extension shows the path — resolved against the open workspace folders when it is relative — with `vscode.window.showTextDocument`, then answers the page with the outcome.
 
 ## Send to DeepSeek Harness
 
-- Right-click a text selection in a file editor and choose **发送到 DSH** to insert a reference at the composer caret. A single-line selection sends `path:line`; a multi-line selection sends `path:start-end` (1-based, inclusive), for example `c:\g-workspace\Heyang-Projects\All-Wiki\余烬狩猎.md:53-63`.
-- Right-click a file tab and choose **发送到 DSH** to insert the file's absolute path at the composer caret.
-- A harness session must be selected; the extension opens/waits for the sidebar automatically when a send command runs.
+- Right-click a text selection in a file editor, or a file tab, and choose **发送到 DSH** to add that file to the composer as an atomic reference chip. It replaces nothing: the chip lands at the composer caret, ready to accompany a message.
+- The chip is labeled with the file name and, for a selection, the selected range — `余烬狩猎.md:53-63`, `余烬狩猎.md:53` for one line, and the bare name for a whole file tab. Clicking it opens the file in this window, and a chip carrying a range lands on that range's first line.
+- The reference's model form is the file's absolute path plus `:line` or `:start-end` (1-based, inclusive) for a selection, for example `c:\g-workspace\Heyang-Projects\All-Wiki\余烬狩猎.md:53-63`.
+- A harness session must be open in the DSH view, because the reference lands in that session's composer; with only the session list showing there is no composer, and the command says so. The extension opens/waits for the sidebar automatically when a send command runs.
 
 ## Requirements
 

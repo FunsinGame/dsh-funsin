@@ -37,7 +37,7 @@ A session pick inserts an atomic inline reference whose hidden `ref` and clipboa
 
 One unavailable or failed candidate domain yields no rows for that domain while the other still lists. A session-reference preparation failure occurs after prompt acceptance and terminates that agent turn.
 
-Click a file reference in the composer to preview its current contents in the right Sidebar. Quoted paths retain their spaces, and paths resolve in the composer Session. Folder and Session references retain their editing behavior.
+Click a file reference in the composer to preview its current contents in the right Sidebar. Quoted paths retain their spaces, and paths resolve in the composer Session. An address the host sent, such as one the VS Code extension's send-to-input command places, is a plain path whose trailing `:line` or `:start-end` names the referenced range, and the file opens at that range's first line; a `@` mention is never read for a range, so a mention path containing a colon keeps it. Folder and Session references retain their editing behavior. The VS Code embed mounts no right Sidebar, so there a file reference opens in the editor window that hosts the page instead.
 
 -----
 

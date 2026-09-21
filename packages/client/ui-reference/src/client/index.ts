@@ -16,16 +16,18 @@ import type {} from '@deepseek-ai/dsh-api-remotes/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+// The `file` entry of `SidebarRightResourceParamsMap`, which types `{ params: { line } }` below.
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
-import { relativeTime } from '@deepseek-ai/dsh-client-ui-primitives'
+import { relativeTime, isVscodeEmbed, openFileInVscode } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   ClientSessionContext, InputTriggerCrumb, InputTriggerServiceContract, InputTriggerSource,
 } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import { formatFileMention } from '@deepseek-ai/dsh-file-reference/grammar'
 import type { FileReferenceCandidate } from '@deepseek-ai/dsh-file-reference/types'
 import type { SessionReferenceMentionCandidate } from '@deepseek-ai/dsh-session-reference/types'
-import { abbreviateHomePath, fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
+import { abbreviateHomePath, fileAddressFor, resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
 import { en, NS, zh, type ReferenceKey } from './locales.ts'
 
 /** Required services: the trigger registry, the Remote namespaces, and the copy. */
@@ -121,9 +123,17 @@ export function apply(ctx: ClientContext): void {
     },
     openReference(session, { ref, appearance }) {
       if (appearance !== 'file') return false
-      const path = ref.startsWith('@"') ? ref.slice(2, -1) : ref.slice(1)
+      const address = parseFileAddress(ref)
       const cwd = sessions.list.getSnapshot().byId[session.sessionId]?.cwd
-      ctx.sidebarRight.openResource(fileAddressFor(session.sessionId, cwd, path))
+      // The embedded layout mounts no right Sidebar, so the file goes to the
+      // VS Code window hosting the page instead of a column that is not there.
+      if (isVscodeEmbed()) {
+        void openFileInVscode(resolveWorkspacePath(cwd, address.path), address.line)
+        return true
+      }
+      const url = fileAddressFor(session.sessionId, cwd, address.path)
+      if (address.line === undefined) ctx.sidebarRight.openResource(url)
+      else ctx.sidebarRight.openResource(url, { params: { line: address.line } })
       return true
     },
     codec: {
@@ -136,6 +146,26 @@ export function apply(ctx: ClientContext): void {
 }
 
 type Translate = (key: ReferenceKey, params?: Record<string, unknown>) => string
+
+/**
+ * Split one file reference's id into the path to open and the line to reveal.
+ *
+ * A reference the `@` menu produced is a `@path` mention (`@"quoted path"` when
+ * the path contains whitespace). An address the host sent — the VS Code
+ * extension's send-to-input command — is a plain path whose trailing `:line`
+ * or `:start-end` names the referenced range. Only the host form is parsed, so
+ * a mention whose path contains a colon cannot be mistaken for a range.
+ * @param ref - the file reference id.
+ * @returns the path to open, and the 1-based first line when the address names a range.
+ */
+function parseFileAddress(ref: string): { path: string; line?: number } {
+  if (ref.startsWith('@')) {
+    return { path: ref.startsWith('@"') ? ref.slice(2, -1) : ref.slice(1) }
+  }
+  const range = /:([1-9]\d*)(?:-([1-9]\d*))?$/.exec(ref)
+  if (range === null) return { path: ref }
+  return { path: ref.slice(0, range.index), line: Number(range[1]) }
+}
 
 type ReferenceCandidateValue =
   | { kind: 'file'; fileKind: FileReferenceCandidate['kind']; label: string; mention: string }

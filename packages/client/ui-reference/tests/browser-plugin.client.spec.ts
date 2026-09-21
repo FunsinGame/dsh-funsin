@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Web reference source coverage: Remote-backed file/session discovery,
  * deterministic ordering and labels, quoted-path suppression, pick projections, codec
@@ -580,5 +581,51 @@ describe('reference preview', () => {
     expect(source.openReference?.(session, { ref: '@[Research](dsh-session:abc)', appearance: 'session' })).toBe(false)
     expect(openResource).toHaveBeenCalledTimes(2)
     await fiber.dispose()
+  })
+
+  it('opens a host address at its range start, which a mention never carries', async () => {
+    const { ctx, source, fiber } = await bench()
+    const openResource = vi.spyOn(ctx.sidebarRight, 'openResource')
+    expect(source.openReference?.(session, { ref: '/proj/src/a.ts:53-63', appearance: 'file' })).toBe(true)
+    expect(source.openReference?.(session, { ref: '/proj/src/a.ts:53', appearance: 'file' })).toBe(true)
+    // A mention's own path decides its colon: `docs/v2:12` stays one path.
+    expect(source.openReference?.(session, { ref: '@docs/v2:12', appearance: 'file' })).toBe(true)
+    expect(openResource).toHaveBeenNthCalledWith(
+      1, 'dsh-resource://file/session/target//proj/src/a.ts', { params: { line: 53 } },
+    )
+    expect(openResource).toHaveBeenNthCalledWith(
+      2, 'dsh-resource://file/session/target//proj/src/a.ts', { params: { line: 53 } },
+    )
+    expect(openResource).toHaveBeenNthCalledWith(3, 'dsh-resource://file/session/target/docs/v2:12')
+    await fiber.dispose()
+  })
+
+  it('opens a file reference in the VS Code window while embedded', async () => {
+    const { ctx, source, fiber } = await bench()
+    const openResource = vi.spyOn(ctx.sidebarRight, 'openResource')
+    const posted: Record<string, unknown>[] = []
+    const post = vi.spyOn(window.parent, 'postMessage').mockImplementation((message: unknown) => {
+      const command = message as Record<string, unknown>
+      posted.push(command)
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { source: 'dsh-vscode', type: 'open-file-result', id: command['id'], ok: true },
+        source: window,
+      }))
+    })
+    document.documentElement.dataset.dshEmbed = '1'
+    try {
+      expect(source.openReference?.(session, { ref: '@notes/readme.md', appearance: 'file' })).toBe(true)
+      // A host address sends its own range start to the editor window.
+      expect(source.openReference?.(session, { ref: '/proj/src/a.ts:53-63', appearance: 'file' })).toBe(true)
+      // The embedded layout mounts no right Sidebar, so the chips go to the editor window.
+      expect(openResource).not.toHaveBeenCalled()
+      expect(posted).toHaveLength(2)
+      expect(posted[0]).toMatchObject({ source: 'dsh-web', type: 'open-file', path: 'notes/readme.md' })
+      expect(posted[1]).toMatchObject({ source: 'dsh-web', type: 'open-file', path: '/proj/src/a.ts', line: 53 })
+    } finally {
+      delete document.documentElement.dataset.dshEmbed
+      post.mockRestore()
+      await fiber.dispose()
+    }
   })
 })

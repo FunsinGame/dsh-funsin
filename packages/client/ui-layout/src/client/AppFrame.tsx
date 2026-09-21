@@ -215,9 +215,10 @@ export function AppFrame({
   ), [usePanelInfo, renderSlot])
   const overlays = useMemo(() => renderSlot('shell.overlay', {}), [renderSlot])
 
-  // Embedded single-column layout: home (session list) ↔ conversation, with a
-  // back button that clears the current selection. Inline styles keep the
-  // embed chrome self-contained; the column occupants render full-width.
+  // Embedded single-column layout: the session list (the sidebar slot) is the
+  // home, and a retained main-View Session replaces it with the Conversation
+  // behind a back button that clears the current selection. Inline styles keep
+  // the embed chrome self-contained; the column occupants render full-width.
   if (embed) {
     return (
       <div
@@ -225,10 +226,6 @@ export function AppFrame({
         style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}
       >
         {hasMainSession ? (
-          <div style={{ flex: '1 1 auto', minHeight: 0, overflow: 'hidden' }}>
-            {renderSlot('sidebar', { collapsed: false, width: viewport })}
-          </div>
-        ) : (
           <>
             <div style={{
               flex: '0 0 auto',
@@ -258,6 +255,10 @@ export function AppFrame({
               {main}
             </div>
           </>
+        ) : (
+          <div style={{ flex: '1 1 auto', minHeight: 0, overflow: 'hidden' }}>
+            {renderSlot('sidebar', { collapsed: false, width: viewport })}
+          </div>
         )}
       </div>
     )

@@ -36,8 +36,8 @@ import type { SkillEntry } from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { InputTriggerServiceContract, InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
-import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
-import { rankByName } from '@deepseek-ai/dsh-client-ui-primitives'
+import { fileAddressFor, resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
+import { isVscodeEmbed, openFileInVscode, rankByName } from '@deepseek-ai/dsh-client-ui-primitives'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: pulls the SlotRegistry service merge (ctx.slots).
@@ -181,6 +181,12 @@ export function apply(ctx: ClientContext): void {
       const open = (catalog: readonly SkillEntry[]): boolean => {
         const path = catalog.find(skill => `/${skill.name}` === ref)?.path
         if (path === undefined) return false
+        // The embedded layout mounts no right Sidebar, so the skill file goes
+        // to the VS Code window hosting the page instead.
+        if (isVscodeEmbed()) {
+          void openFileInVscode(resolveWorkspacePath(cwd, path))
+          return true
+        }
         ctx.sidebarRight.openResource(fileAddressFor(session.sessionId, cwd, path))
         return true
       }

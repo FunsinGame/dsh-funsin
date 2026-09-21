@@ -283,3 +283,30 @@ describe('submit transaction hardening', () => {
     expect(track).toHaveBeenCalledWith('@src/', 5, { tier: 'plain' }, shell.snapshot.draftRev)
   })
 })
+
+describe('caret reference placement', () => {
+  it('places a host file chip at the caret as one atomic draft occurrence', () => {
+    const ref = '/proj/src/a.ts:53-63'
+    const shell = new SessionInputShell({
+      actx: {} as Context,
+      defaultSink: vi.fn(),
+      commandAttachments,
+    })
+    shell.setDraft('see ')
+    expect(shell.insertReferenceAtCaret({
+      source: 'reference',
+      ref,
+      label: 'a.ts:53-63',
+      appearance: 'file',
+      clipboardText: ref,
+    })).toBe(true)
+    // The draft IS the clipboard projection, so the address the extension sent
+    // is what the model receives and what the chip displays.
+    expect(shell.snapshot.draft).toBe(`see ${ref} `)
+    expect(shell.snapshot.occurrences).toEqual([
+      expect.objectContaining({
+        source: 'reference', ref, label: 'a.ts:53-63', appearance: 'file', offset: 4, length: ref.length,
+      }),
+    ])
+  })
+})

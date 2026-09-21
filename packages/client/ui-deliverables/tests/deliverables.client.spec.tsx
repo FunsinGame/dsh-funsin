@@ -23,6 +23,7 @@ import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-c
 import type { ChatFileMentions, TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { makeTranslate, stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
 import { Deliverables, DeliverablesTail, selectDeliverables, type DeliverablesInjected } from '../src/client/Deliverables.tsx'
+import { ChangedFiles } from '../src/client/ChangedFiles.tsx'
 import type { ReviewInjected } from '../src/client/ReviewTab.tsx'
 import { ChangesSummaryStore } from '../src/client/changes-summary.ts'
 import { changesSummaryUrl, type ChangesSummary } from '../src/changes.ts'
@@ -598,6 +599,34 @@ describe('ChangedFiles card', () => {
     expect(card.lastElementChild).toBe(collapse)
     fireEvent.click(collapse)
     expect(within(card).getAllByRole('listitem')).toHaveLength(3)
+  })
+
+  it('opens a changed file in the VS Code window while embedded', () => {
+    document.documentElement.dataset.dshEmbed = '1'
+    try {
+      const { props, openFile, view } = renderCard()
+      const card = view.container.querySelector('[data-changed-files]')
+      if (!(card instanceof HTMLElement)) throw new Error('changed-files card missing')
+      fireEvent.click(within(card).getByRole('button', { name: 'View changes to config/feature-flags.json' }))
+      // The embedded layout has neither a right Sidebar nor a review surface,
+      // so the row opens the file itself.
+      expect(openFile).toHaveBeenCalledExactlyOnceWith('config/feature-flags.json')
+      expect(props.openChangesReview).not.toHaveBeenCalled()
+      fireEvent.click(within(card).getByRole('button', { name: 'Review this turn’s changes in the sidebar' }))
+      expect(openFile).toHaveBeenLastCalledWith('config/design-token')
+    } finally {
+      delete document.documentElement.dataset.dshEmbed
+    }
+  })
+
+  it('opens nothing when the header names no listed file', () => {
+    const openReview = vi.fn()
+    const openFile = vi.fn()
+    const view = render(<ChangedFiles t={makeTranslate(en)} cwd={undefined} openReview={openReview} openFile={openFile}
+      changes={{ seq: 5, files: [], total: 0, added: 0, deleted: 0 }} />)
+    fireEvent.click(view.getByRole('button', { name: 'Review this turn’s changes in the sidebar' }))
+    expect(openReview).not.toHaveBeenCalled()
+    expect(openFile).not.toHaveBeenCalled()
   })
 
   it('opens the review the same way without a desktop', () => {

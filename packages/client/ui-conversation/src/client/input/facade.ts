@@ -265,6 +265,18 @@ export class SessionInputShell implements SessionInput {
   }
 
   /**
+   * Place one reference chip at the caret (programmatic writes such as the VS
+   * Code embed's file address). The span is the live caret projection guarded
+   * by the current revision, so the shared insert path applies its phase and
+   * CAS checks exactly as it does to a pick.
+   * @param ref - the reference insertion to place.
+   * @returns whether the edit applied.
+   */
+  insertReferenceAtCaret(ref: ReferenceInsert): boolean {
+    return this.insertReference(ref, { ...this.draftEditor.caretSpan(), draftRev: this.rev })
+  }
+
+  /**
    * Enter adjudication + submit transaction + default sink. Effects fan out
    * from the machine; this method only feeds the event. Lock entry
    * (adjudicating/submitting) force-closes the transient layers: the popup

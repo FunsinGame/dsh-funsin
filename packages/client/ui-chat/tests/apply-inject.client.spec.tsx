@@ -46,6 +46,29 @@ function sessionFakeFor() {
   } satisfies SessionBehaviorOverrides
 }
 
+/** Commands the embedded page posted to the extension's frame in the current test. */
+const embedCommands: Record<string, unknown>[] = []
+
+/**
+ * Answer every embed open-file command the way the extension's webview frame does.
+ * @param ok - the outcome the frame reports back.
+ * @returns a disposer that removes the answering listener.
+ */
+function answerEmbedOpenFile(ok: boolean): () => void {
+  embedCommands.length = 0
+  const listener = (event: MessageEvent): void => {
+    const data = event.data as Record<string, unknown> | undefined
+    if (data?.source !== 'dsh-web' || data.type !== 'open-file') return
+    embedCommands.push(data)
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { source: 'dsh-vscode', type: 'open-file-result', id: data.id, ok },
+      source: window,
+    }))
+  }
+  window.addEventListener('message', listener)
+  return () => { window.removeEventListener('message', listener) }
+}
+
 async function bench() {
   const runtime = await SlotTestRuntime.create()
   runtime.ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
@@ -154,6 +177,43 @@ describe('Chat inject API', () => {
     await injected.openFile('src/a.ts', { line: 7 })
     expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a.ts', { params: { line: 7 } })
     await b.runtime.dispose()
+  })
+
+  it('opens a file in the VS Code window while the page is embedded', async () => {
+    document.documentElement.dataset.dshEmbed = '1'
+    const b = await bench()
+    const stopAnswering = answerEmbedOpenFile(true)
+    try {
+      const { injected } = b.chatViewApi(b.rootReference)
+      await injected.openFile('src/a.ts', { line: 7 })
+      // The embedded layout mounts no right Sidebar, so the link goes to the
+      // editor window instead of a column that is not on screen.
+      expect(b.sidebarRight.openResource).not.toHaveBeenCalled()
+      expect(embedCommands).toHaveLength(1)
+      expect(embedCommands[0]).toMatchObject({
+        source: 'dsh-web', type: 'open-file', path: '/proj/src/a.ts', line: 7,
+      })
+      expect(typeof embedCommands[0]?.id).toBe('string')
+    } finally {
+      stopAnswering()
+      delete document.documentElement.dataset.dshEmbed
+      await b.runtime.dispose()
+    }
+  })
+
+  it('reports an editor refusal while the page is embedded', async () => {
+    document.documentElement.dataset.dshEmbed = '1'
+    const b = await bench()
+    const stopAnswering = answerEmbedOpenFile(false)
+    try {
+      const { injected } = b.chatViewApi(b.rootReference)
+      await expect(injected.openFile('src/a.ts')).rejects.toThrow('无法打开此文件')
+      expect(b.sidebarRight.openResource).not.toHaveBeenCalled()
+    } finally {
+      stopAnswering()
+      delete document.documentElement.dataset.dshEmbed
+      await b.runtime.dispose()
+    }
   })
 
   it('opens message HTTP(S) links in Sidebar Browser tabs', async () => {

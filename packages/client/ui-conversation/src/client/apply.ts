@@ -212,7 +212,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     // is the one the extension's insert targets.
     currentSessionId: () => Object.values(sessions.list.getSnapshot().byId)
       .find(session => (session.retainedBy.mainView ?? 0) > 0)?.id,
-    insertText: (sessionId, text) => { inputHub.shell(sessionId).paste(text) },
+    insertFileReference: (sessionId, reference) => { inputHub.shell(sessionId).insertReferenceAtCaret(reference) },
     sendResult: (result) => { window.parent.postMessage(result, '*') },
   }), 'ui-conversation: VS Code embed input')
 

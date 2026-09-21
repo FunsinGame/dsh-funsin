@@ -3,7 +3,7 @@
 import type { GlobalStandardProps, RenderOpts } from '@deepseek-ai/dsh-client-ui-slots'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { AppFrame } from '../src/client/AppFrame.tsx'
 import type { AppFrameProps } from '../src/client/AppFrame.tsx'
 import type { MainPanelId, RightbarOwnerProps, SidebarOwnerProps } from '../src/client/index.ts'
@@ -89,6 +89,7 @@ function mountFrame(windowWidth = frameWidth) {
     getSnapshot: () => instance.getSnapshot().panelInfo,
     subscribe: listener => instance.subscribe(listener),
   })
+  const back = vi.fn()
   const element = () => (
     <AppFrame
       useStore={useStore}
@@ -100,14 +101,14 @@ function mountFrame(windowWidth = frameWidth) {
       useSessionRetainInfo={() => undefined}
       useResource={useResource}
       useWorkspaces={sel => sel(workspaceState)}
-      back={vi.fn()}
+      back={back}
       t={key => key === 'brand.localBuild' ? 'DSH Local Build' : key}
     />
   )
   const utils = render(element())
   const frame = utils.container.firstElementChild as HTMLElement
   return {
-    ...utils, instance, frame, slotCalls,
+    ...utils, instance, frame, slotCalls, back,
     rerenderFrame: () => { utils.rerender(element()) },
     rightOwner: () => slotCalls.findLast(c => c.key === 'rightbar')!.props as RightbarOwnerProps,
     sidebarOwner: () => slotCalls.findLast(c => c.key === 'sidebar')!.props as SidebarOwnerProps,
@@ -259,6 +260,36 @@ describe('AppFrame', () => {
       expect(selectedSession).toBe(sessionId)
       expect(document.title).toBe(panelId === null ? 'Session title — DSH Local Build' : 'DSH Local Build')
     }
+  })
+})
+
+describe('AppFrame embed layout', () => {
+  beforeEach(() => { document.documentElement.dataset.dshEmbed = '1' })
+  afterEach(() => { delete document.documentElement.dataset.dshEmbed })
+
+  it('opens the session-list home while no main-View Session is retained', () => {
+    selectedSession = undefined
+    const { getByTestId, queryByTestId, queryByLabelText } = mountFrame()
+    expect(getByTestId('sidebar-content')).toBeTruthy()
+    expect(queryByTestId('main-content')).toBeNull()
+    expect(queryByLabelText('返回会话列表')).toBeNull()
+  })
+
+  it('replaces the home with the Conversation behind a back control once a Session is retained', () => {
+    const { getByTestId, getByLabelText, queryByTestId, back } = mountFrame()
+    expect(getByTestId('main-content').getAttribute('data-entry-key')).toBe('conversation')
+    expect(queryByTestId('sidebar-content')).toBeNull()
+    fireEvent.click(getByLabelText('返回会话列表'))
+    expect(back).toHaveBeenCalledOnce()
+  })
+
+  it('returns to the home after the back control clears the retained Session', () => {
+    const { rerenderFrame, getByLabelText, queryByTestId } = mountFrame()
+    fireEvent.click(getByLabelText('返回会话列表'))
+    selectedSession = undefined
+    rerenderFrame()
+    expect(queryByTestId('main-content')).toBeNull()
+    expect(queryByTestId('sidebar-content')).toBeTruthy()
   })
 })
 

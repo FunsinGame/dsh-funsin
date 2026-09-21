@@ -8,12 +8,9 @@
 
 import { randomBytes } from 'node:crypto'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { readOpenFileRequest, type OpenFileRequest } from './open-file'
 
-/** A request to open one file at an optional 1-based line. */
-export interface OpenFileRequest {
-  path: string
-  line?: number
-}
+export type { OpenFileRequest } from './open-file'
 
 /** A request to open a two-way diff of text snapshots. */
 export interface OpenDiffRequest {
@@ -75,16 +72,6 @@ function readJsonBody(req: IncomingMessage): Promise<unknown> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function readOpenFileRequest(value: unknown): OpenFileRequest | undefined {
-  if (!isRecord(value)) return undefined
-  const path = value.path
-  if (typeof path !== 'string' || path.length === 0) return undefined
-  const line = value.line
-  if (line === undefined) return { path }
-  if (typeof line !== 'number' || !Number.isInteger(line) || line <= 0) return undefined
-  return { path, line }
 }
 
 function readOpenDiffRequest(value: unknown): OpenDiffRequest | undefined {
