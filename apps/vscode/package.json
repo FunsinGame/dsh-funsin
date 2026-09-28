@@ -111,6 +111,11 @@
           "minimum": 0,
           "maximum": 65535,
           "description": "Port the harness web server binds; 0 lets the OS pick a free port."
+        },
+        "dsh.showStatusBar": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show the DeepSeek Harness status bar button, which reports whether the harness is running and opens the view when clicked. Off by default; the activity-bar view and the `DeepSeek Harness: Open` command stay available either way."
         }
       }
     },

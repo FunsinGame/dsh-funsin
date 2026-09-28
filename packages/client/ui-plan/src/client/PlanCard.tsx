@@ -5,7 +5,7 @@ import type { ChatNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { shallowEqual } from '@deepseek-ai/dsh-client-store'
 import type {} from './plan-definition.ts'
 import type { InjectFace, PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import type { SubmittedPlan } from './plan.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-user-questions/client'
 import type { createPlanReviewStore } from './review-store.ts'
 import css from './PlanPreview.module.css'
@@ -13,7 +13,7 @@ import css from './PlanPreview.module.css'
 /** Session-bound navigation for logged plans. */
 export interface PlanOpenInjected {
   /** Open or focus the exact submitted plan. */
-  openPlan: (callId: ToolCallId) => void
+  openPlan: (plan: SubmittedPlan) => void
 }
 
 /** Session-bound preview navigation for one pending review. */
@@ -38,7 +38,7 @@ export function PlanCards({ turn, useChat, openPlan, t }: PropsRuntime<'conversa
     <div className={css.cards} data-plan-artifacts>
       {plans.map(({ data: plan }) => <button key={plan.callId} type="button" className={css.card} data-plan-card={plan.callId}
         aria-label={t('preview.openNamed', { title: plan.title })}
-        onClick={() => { openPlan(plan.callId) }}>
+        onClick={() => { openPlan(plan) }}>
         <span className={css.cardIcon}><FileTypeIcon kind="markdown" size={20} /></span>
         <span className={css.cardDetails}>
           <span className={css.cardTitle}>{plan.title}</span>

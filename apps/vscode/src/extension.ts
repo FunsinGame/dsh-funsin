@@ -14,10 +14,13 @@ import { startBridge, type BridgeHandlers, type RunningBridge } from './bridge'
 import { buildProfileArgs, resolveLaunch, type WebFlags } from './cli'
 import { formatFileReference, insertFailureMessage, type FileReference } from './format'
 import { readOpenFileMessage, resolveWorkspaceFilePath, type OpenFileMessage } from './open-file'
+import { documentTabName, readOpenDocumentMessage, type OpenDocumentMessage, type OpenDocumentRequest } from './open-document'
 import { startServer, type RunningServer } from './server'
 
 const OUTPUT_NAME = 'DeepSeek Harness'
 const VIEW_ID = 'dsh.web'
+/** URI scheme of the read-only documents the embedded page supplies as text. */
+const PAGE_DOCUMENT_SCHEME = 'dsh-doc'
 
 /** Module-scope so `deactivate` can stop the harness on extension shutdown. */
 let server: RunningServer | undefined
@@ -59,6 +62,7 @@ class WebViewProvider implements vscode.WebviewViewProvider {
   constructor(
     private readonly boot: () => Promise<RunningServer | undefined>,
     private readonly openFileInEditor: (path: string, line: number | undefined) => Promise<boolean>,
+    private readonly openDocumentInEditor: (request: OpenDocumentRequest) => Promise<boolean>,
     private readonly log: (line: string) => void,
   ) {}
 
@@ -78,6 +82,11 @@ class WebViewProvider implements vscode.WebviewViewProvider {
       if (message.type === 'dsh.open-file') {
         const request = readOpenFileMessage(message)
         if (request !== undefined) void this.openInEditor(request)
+        return
+      }
+      if (message.type === 'dsh.open-document') {
+        const request = readOpenDocumentMessage(message)
+        if (request !== undefined) void this.openDocument(request)
         return
       }
       if (message.type === 'dsh.frame-log') {
@@ -111,6 +120,22 @@ class WebViewProvider implements vscode.WebviewViewProvider {
       await webview.postMessage({ type: 'dsh.open-file-result', id: request.id, ok })
     } catch {
       // The view was disposed while the file opened; the page's own timeout answers instead.
+    }
+  }
+
+  /**
+   * Show one frame-supplied document and answer the frame, which resolves the
+   * embedded page's pending open.
+   * @param request - the validated document request and the id its answer echoes.
+   */
+  private async openDocument(request: OpenDocumentMessage): Promise<void> {
+    const ok = await this.openDocumentInEditor(request)
+    const webview = this.view?.webview
+    if (webview === undefined) return
+    try {
+      await webview.postMessage({ type: 'dsh.open-document-result', id: request.id, ok })
+    } catch {
+      // The view was disposed while the document opened; the page's own timeout answers instead.
     }
   }
 
@@ -316,15 +341,23 @@ iframe { width: 100%; height: 100%; border: 0; display: block; }
     if (data.type === 'open-file' && typeof data.id === 'string' && typeof data.path === 'string') {
       log('page-open-file', { id: data.id, path: data.path, line: data.line })
       vscode.postMessage({ type: 'dsh.open-file', id: data.id, path: data.path, line: data.line })
+      return
+    }
+    if (data.type === 'open-document' && typeof data.id === 'string' && typeof data.title === 'string'
+      && typeof data.text === 'string' && typeof data.language === 'string') {
+      log('page-open-document', { id: data.id, title: data.title, language: data.language, length: data.text.length })
+      vscode.postMessage({
+        type: 'dsh.open-document', id: data.id, title: data.title, text: data.text, language: data.language,
+      })
     }
   })
   window.addEventListener('message', (event) => {
     const data = event.data
-    if (!data || data.type !== 'dsh.open-file-result' || typeof data.id !== 'string') return
-    if (loaded) {
-      iframe.contentWindow.postMessage(
-        { source: 'dsh-vscode', type: 'open-file-result', id: data.id, ok: data.ok === true }, origin)
-    }
+    if (!data || typeof data.id !== 'string') return
+    if (data.type !== 'dsh.open-file-result' && data.type !== 'dsh.open-document-result') return
+    if (!loaded) return
+    const type = data.type === 'dsh.open-file-result' ? 'open-file-result' : 'open-document-result'
+    iframe.contentWindow.postMessage({ source: 'dsh-vscode', type, id: data.id, ok: data.ok === true }, origin)
   })
 })()
 </script>
@@ -378,6 +411,43 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   }
 
+  /**
+   * Text of every page-supplied document this window has been asked to show,
+   * keyed by document address. The page resends the text on every open, so the
+   * entry exists to answer the editor's own read of the document, including a
+   * later re-read after the page refreshed it.
+   */
+  const pageDocuments = new Map<string, string>()
+  const documentsChanged = new vscode.EventEmitter<vscode.Uri>()
+  context.subscriptions.push(
+    documentsChanged,
+    vscode.workspace.registerTextDocumentContentProvider(PAGE_DOCUMENT_SCHEME, {
+      onDidChange: documentsChanged.event,
+      provideTextDocumentContent: uri => pageDocuments.get(uri.toString()) ?? '',
+    }),
+  )
+
+  /**
+   * Show one page-supplied document in this window, refreshing it when the page
+   * asks for a title whose tab is already open.
+   * @param request - the page's document title, text, and language.
+   * @returns whether the editor accepted the document.
+   */
+  async function openDocumentInEditor(request: OpenDocumentRequest): Promise<boolean> {
+    try {
+      const uri = vscode.Uri.from({ scheme: PAGE_DOCUMENT_SCHEME, path: `/${documentTabName(request.title)}` })
+      pageDocuments.set(uri.toString(), request.text)
+      documentsChanged.fire(uri)
+      const document = await vscode.workspace.openTextDocument(uri)
+      await vscode.languages.setTextDocumentLanguage(document, request.language)
+      await vscode.window.showTextDocument(document, { preview: false })
+      return true
+    } catch (error) {
+      output.appendLine(`[dsh-vscode] openDocument failed: ${errorMessage(error)}`)
+      return false
+    }
+  }
+
   function getBridge(): Promise<RunningBridge | undefined> {
     if (bridge !== undefined) return Promise.resolve(bridge)
     if (bridgePromise !== undefined) return bridgePromise
@@ -425,13 +495,37 @@ export function activate(context: vscode.ExtensionContext): void {
   statusBar.command = 'dsh.open'
   context.subscriptions.push(statusBar)
 
-  const setStatus = (running: boolean, url?: string): void => {
-    statusBar.text = running ? '$(rocket) DeepSeek Harness' : '$(debug-start) DeepSeek Harness'
-    statusBar.tooltip = running
-      ? `DeepSeek Harness running at ${url ?? ''} — click to open`
+  let statusRunning = false
+  let statusUrl: string | undefined
+
+  function readShowStatusBar(): boolean {
+    return vscode.workspace.getConfiguration('dsh').get<boolean>('showStatusBar', false)
+  }
+
+  /** Render the status bar button, or hide it when `dsh.showStatusBar` is off. */
+  const applyStatus = (): void => {
+    if (!readShowStatusBar()) {
+      statusBar.hide()
+      return
+    }
+    statusBar.text = statusRunning ? '$(rocket) DeepSeek Harness' : '$(debug-start) DeepSeek Harness'
+    statusBar.tooltip = statusRunning
+      ? `DeepSeek Harness running at ${statusUrl ?? ''} — click to open`
       : 'DeepSeek Harness stopped — click to start'
     statusBar.show()
   }
+
+  const setStatus = (running: boolean, url?: string): void => {
+    statusRunning = running
+    statusUrl = url
+    applyStatus()
+  }
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration('dsh.showStatusBar')) applyStatus()
+    }),
+  )
 
   function readFlags(): WebFlags {
     const config = vscode.workspace.getConfiguration('dsh')
@@ -558,7 +652,7 @@ export function activate(context: vscode.ExtensionContext): void {
     await sendToHarness(formatFileReference(fileUri.fsPath, basename(fileUri.fsPath)))
   }
 
-  webProvider = new WebViewProvider(boot, openFileInEditor, line => output.appendLine(line))
+  webProvider = new WebViewProvider(boot, openFileInEditor, openDocumentInEditor, line => output.appendLine(line))
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(VIEW_ID, webProvider, {
       webviewOptions: { retainContextWhenHidden: true },

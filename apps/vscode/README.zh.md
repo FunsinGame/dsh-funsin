@@ -6,12 +6,12 @@ DeepSeek Harness VS Code 扩展：它在回环端口上启动 harness 的 `web` 
 
 ## How it works
 
-1. 激活时扩展注册一个状态栏项、一个活动栏 **DeepSeek Harness** 视图，以及若干命令（`Open`、`Open in Browser`、`Restart`、`Stop`，以及用于编辑器选区和文件标签页的 `发送到 DSH`）。
+1. 激活时扩展注册一个活动栏 **DeepSeek Harness** 视图，以及若干命令（`Open`、`Open in Browser`、`Restart`、`Stop`，以及用于编辑器选区和文件标签页的 `发送到 DSH`）。它还会注册一个显示 harness 状态的状态栏按钮；`dsh.showStatusBar` 可打开该按钮。
 2. 打开该视图时按以下顺序解析 `dsh` CLI：`dsh.cliPath` 设置、`DSH_CLI` 环境变量、源码检出中构建出的 `apps/cli/lib/bin.js`，最后是 `PATH` 上的 `dsh`。
 3. 它以第一个工作区文件夹为工作目录启动 `dsh --profile web --host 127.0.0.1 --port <dsh.port> --no-open`（端口 `0` 请求由操作系统分配，`--no-open` 让默认浏览器保持关闭），然后等待 `dsh web: http://127.0.0.1:<port>/?token=...` 就绪行。
 4. 视图在一个全尺寸 iframe 中渲染该 URL。`Open in Browser` 把同一 URL 交给 `vscode.env.openExternal`。在嵌入模式（`DSH_VSCODE=1`）下，harness 把启动 token 保留在 iframe URL 中，并在 `/api` 调用和 WebSocket mux 上接受它，因此侧边栏不依赖跨站 cookie。
 5. 扩展还启动一个受 token 保护的回路桥，并把 `DSH_VSCODE=1`、`DSH_VSCODE_BRIDGE`、`DSH_VSCODE_BRIDGE_TOKEN` 传给子进程。检测到嵌入模式的 harness 插件可以调用该桥上的 `POST /open-file` 和 `POST /open-diff`，在当前 VS Code 窗口中打开文件或差异，而不是另起一个 `code` 进程。
-6. 点击对话中的文件会在本窗口中打开它：嵌入的单列布局不挂载右侧栏，因此页面通过 webview frame 发送一条 `open-file` 消息，扩展用 `vscode.window.showTextDocument` 显示该路径（相对路径先基于已打开的工作区文件夹解析），然后把结果答复给页面。
+6. 点击对话中的文件会在本窗口中打开它：嵌入的单列布局不挂载右侧栏，因此页面通过 webview frame 发送一条 `open-file` 消息，扩展用 `vscode.window.showTextDocument` 显示该路径（相对路径先基于已打开的工作区文件夹解析），然后把结果答复给页面。磁盘上没有文件的文档走同一条通道，消息类型为 `open-document`：扩展注册 `dsh-doc:` 内容提供方，按请求标题推导出的标签名保存页面送来的正文，并以只读编辑器文档展示，因此已提交的计划会打开在原本属于右侧栏的位置。标签页沿用页面给出的语言 id，计划因此以 Markdown 高亮显示。
 
 ## Send to DeepSeek Harness
 
@@ -63,3 +63,4 @@ npx --yes @vscode/vsce package --no-dependencies
 | `dsh.cliPath` | `""` | `dsh` CLI 入口（`lib/bin.js`）的绝对路径。留空则从 `PATH` 解析 `dsh`。 |
 | `dsh.host` | `127.0.0.1` | 回环绑定主机（只提供回环地址）。 |
 | `dsh.port` | `0` | 监听端口；`0` 请求由操作系统分配。 |
+| `dsh.showStatusBar` | `false` | 是否显示状态栏按钮；该按钮显示 harness 状态，点击时打开视图。 |

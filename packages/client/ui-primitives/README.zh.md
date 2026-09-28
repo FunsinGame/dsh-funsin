@@ -72,7 +72,7 @@ kind: "package-library"
 
 ### Shell 集成
 
-`isDarwinDesktop()` 报告 macOS Electron 外壳：其 preload 会在 `<html>` 上标记 `data-platform="darwin"`。另有一个文档标记标识 VS Code 侧边栏嵌入模式（`data-dsh-embed`）：`isVscodeEmbed()` 报告它，`openFileInVscode(path, line?)` 请求承载页面的扩展在自身编辑器窗口中打开文件，参数可以是绝对路径，也可以是由该扩展按自己的工作区解析的路径。请求经由 webview frame 传递，并以该编辑器的答复落定；在嵌入模式之外、frame 始终不答复，以及编辑器无法打开该文件时返回 `false`，因此自带展示面的调用方对每种未处理情形都保留自己的展示面。嵌入模式的单列布局不挂载右侧栏，因此其中的文件链接没有可落地的列，转而走这里。整个文档的每个调用方共用一个通道。
+`isDarwinDesktop()` 报告 macOS Electron 外壳：其 preload 会在 `<html>` 上标记 `data-platform="darwin"`。另有一个文档标记标识 VS Code 侧边栏嵌入模式（`data-dsh-embed`）：`isVscodeEmbed()` 报告它，`openFileInVscode(path, line?)` 请求承载页面的扩展在自身编辑器窗口中打开文件，参数可以是绝对路径，也可以是由该扩展按自己的工作区解析的路径。`openDocumentInVscode({ title, text, language })` 复用同一通道处理磁盘上没有文件的文本（例如已提交的计划），编辑器按 `title` 命名并以只读文档展示；再次请求同一标题会刷新该标签页。每个请求都经由 webview frame 传递，并以该编辑器的答复落定；在嵌入模式之外、frame 始终不答复，以及编辑器无法展示内容时都返回 `false`，因此自带展示面的调用方对每种未处理情形都保留自己的展示面。嵌入模式的单列布局不挂载右侧栏，因此其中的文件链接与文档视图没有可落地的列，转而走这里。整个文档的每个调用方共用一个通道。
 
 ### 渲染 agent 输出
 
@@ -105,7 +105,7 @@ kind: "package-library"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 原子组件公开导出 |
-| [`src/darwin-desktop.ts`](src/darwin-desktop.ts) / [`src/vscode-embed.ts`](src/vscode-embed.ts) | 外壳检测与 VS Code 嵌入模式的文件打开通道 |
+| [`src/darwin-desktop.ts`](src/darwin-desktop.ts) / [`src/vscode-embed.ts`](src/vscode-embed.ts) | 外壳检测与 VS Code 嵌入模式的打开通道 |
 | [`src/markdown/`](src/markdown/) | Markdown 与数学公式流水线：micromark 解析、KaTeX 排版、增量流式渲染器、`CodeBlock`/`JsonBlock` |
 | [`src/TerminalBlock.tsx`](src/TerminalBlock.tsx) | ANSI 转义解析（`anser`）与终端卡片渲染 |
 | [`src/ReadBlock.tsx`](src/ReadBlock.tsx) / [`src/DiffBlock.tsx`](src/DiffBlock.tsx) | 读取与差异卡片 |

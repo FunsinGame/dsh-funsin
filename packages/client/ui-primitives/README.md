@@ -72,7 +72,7 @@ The catalog above lists what each export is for; this section covers the behavio
 
 ### Shell integration
 
-`isDarwinDesktop()` reports the macOS Electron shell, whose preload marks `<html>` with `data-platform="darwin"`. A separate document mark identifies the VS Code sidebar embed (`data-dsh-embed`): `isVscodeEmbed()` reports it, and `openFileInVscode(path, line?)` asks the extension hosting the page to show a file in its editor window, taking an absolute path or one that extension resolves against its own workspace. The request travels over the webview frame and resolves on that editor's answer; it returns `false` outside the embed, when the frame never answers, and when the editor cannot open the file, so a caller with a surface of its own keeps it for every case it does not handle. The embedded single-column layout mounts no right Sidebar, so file links there have no column to land in and route here instead. One channel serves every caller in the document.
+`isDarwinDesktop()` reports the macOS Electron shell, whose preload marks `<html>` with `data-platform="darwin"`. A separate document mark identifies the VS Code sidebar embed (`data-dsh-embed`): `isVscodeEmbed()` reports it, and `openFileInVscode(path, line?)` asks the extension hosting the page to show a file in its editor window, taking an absolute path or one that extension resolves against its own workspace. `openDocumentInVscode({ title, text, language })` uses the same channel for text with no file on disk, such as a submitted plan, which the editor shows as a read-only document named after `title`; asking for that title again refreshes the tab. Each request travels over the webview frame and resolves on that editor's answer; both return `false` outside the embed, when the frame never answers, and when the editor cannot show the content, so a caller with a surface of its own keeps it for every case it does not handle. The embedded single-column layout mounts no right Sidebar, so file links and document views there have no column to land in and route here instead. One channel serves every caller in the document.
 
 ### Rendering agent output
 
@@ -105,7 +105,7 @@ The package enforces one separation: presentational React atoms with zero Cordis
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Public atom exports |
-| [`src/darwin-desktop.ts`](src/darwin-desktop.ts) / [`src/vscode-embed.ts`](src/vscode-embed.ts) | Shell detection and the VS Code embed file-open channel |
+| [`src/darwin-desktop.ts`](src/darwin-desktop.ts) / [`src/vscode-embed.ts`](src/vscode-embed.ts) | Shell detection and the VS Code embed open channel |
 | [`src/markdown/`](src/markdown/) | Markdown and math pipeline: micromark parsing, KaTeX typesetting, incremental streaming renderer, `CodeBlock`/`JsonBlock` |
 | [`src/TerminalBlock.tsx`](src/TerminalBlock.tsx) | ANSI escape parsing (`anser`) and terminal card rendering |
 | [`src/ReadBlock.tsx`](src/ReadBlock.tsx) / [`src/DiffBlock.tsx`](src/DiffBlock.tsx) | Read and diff cards |

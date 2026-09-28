@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
-/** The page half of the VS Code embed file-open channel. */
+/** The page half of the VS Code embed open channel: a file, or text with no file. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { isVscodeEmbed, openFileInVscode } from '../src/vscode-embed.ts'
+import { isVscodeEmbed, openDocumentInVscode, openFileInVscode } from '../src/vscode-embed.ts'
 
 /** Answer one posted command the way the extension's webview frame does. */
 function answer(command: Record<string, unknown>, ok: boolean): void {
+  const type = command['type'] === 'open-document' ? 'open-document-result' : 'open-file-result'
   window.dispatchEvent(new MessageEvent('message', {
-    data: { source: 'dsh-vscode', type: 'open-file-result', id: command.id, ok },
+    data: { source: 'dsh-vscode', type, id: command.id, ok },
     source: window,
   }))
 }
@@ -122,5 +123,51 @@ describe('openFileInVscode', () => {
     await expect(openFileInVscode('/proj/src/b.ts')).resolves.toBe(true)
     expect(posted.map(command => command['path'])).toEqual(['/proj/src/a.ts', '/proj/src/b.ts'])
     expect(posted[0]?.['id']).not.toBe(posted[1]?.['id'])
+  })
+})
+
+describe('openDocumentInVscode', () => {
+  const pageDocument = { title: 'Saved plan', text: '# Saved plan\n\nComplete body', language: 'markdown' }
+
+  it('refuses without asking the frame outside the embed', async () => {
+    const posted = capture(true)
+    await expect(openDocumentInVscode(pageDocument)).resolves.toBe(false)
+    expect(posted).toEqual([])
+  })
+
+  it('posts the title, text, and language, and resolves on the frame\'s answer', async () => {
+    document.documentElement.dataset.dshEmbed = '1'
+    const posted = capture(true)
+    await expect(openDocumentInVscode(pageDocument)).resolves.toBe(true)
+    expect(posted).toHaveLength(1)
+    expect(posted[0]).toMatchObject({
+      source: 'dsh-web',
+      type: 'open-document',
+      title: 'Saved plan',
+      text: '# Saved plan\n\nComplete body',
+      language: 'markdown',
+    })
+    expect(typeof posted[0]?.id).toBe('string')
+  })
+
+  it('reads a refused document as failure', async () => {
+    document.documentElement.dataset.dshEmbed = '1'
+    const posted = captureUnanswered()
+    const pending = openDocumentInVscode(pageDocument)
+    answer(posted[0]!, false)
+    await expect(pending).resolves.toBe(false)
+  })
+
+  it('refuses a document the frame never answers', async () => {
+    document.documentElement.dataset.dshEmbed = '1'
+    vi.useFakeTimers()
+    try {
+      captureUnanswered()
+      const pending = openDocumentInVscode(pageDocument)
+      await vi.advanceTimersByTimeAsync(2000)
+      await expect(pending).resolves.toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

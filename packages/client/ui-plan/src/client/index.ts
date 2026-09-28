@@ -15,13 +15,13 @@ import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-user-questions/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-resources/client'
-import { extractMarkdownPlainText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { extractMarkdownPlainText, isVscodeEmbed, openDocumentInVscode } from '@deepseek-ai/dsh-client-ui-primitives'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { PlanCards, PlanReviewOpen, type PlanOpenInjected, type PlanReviewOpenInjected } from './PlanCard.tsx'
 import { PlanPreview, PlanTitle } from './PlanPreview.tsx'
 import { planDefinition } from './plan-definition.ts'
 import { planResourceProvider } from './plan-resource.ts'
-import { planAddress, parsePlanAddress } from './plan.ts'
+import { planAddress, parsePlanAddress, type SubmittedPlan } from './plan.ts'
 import { isReviewPreviewAddress, reviewPreviewAddress } from './review-preview.ts'
 import { createPlanReviewStore } from './review-store.ts'
 import { PlanChip } from './PlanModeControl.tsx'
@@ -67,11 +67,24 @@ export function apply(ctx: ClientContext): void {
     canOpen: address => parsePlanAddress(address) !== undefined || isReviewPreviewAddress(address),
     title: () => t('preview.title'),
   }), 'ui-plan: sidebar type')
+  /** The heading a plan document is shown under. */
+  const planTitle = (markdown: string): string => extractMarkdownPlainText(markdown, { mode: 'first-line' })
+  /** Open or focus one invocation's logged plan in the right Sidebar. */
+  const openPlanAddress = (sessionId: SessionId, callId: SubmittedPlan['callId']): void => {
+    const child = ctx.sessions.subagentAddress(sessionId)
+    const session = child === undefined ? { kind: 'session' as const, sessionId } : { kind: 'subagent' as const, ...child }
+    ctx.sidebarRight.openResourceIn(sessionId, planAddress({ session, callId }))
+  }
   const open = (sessionId: SessionId): PlanOpenInjected => ({
-    openPlan: (callId) => {
-      const child = ctx.sessions.subagentAddress(sessionId)
-      const session = child === undefined ? { kind: 'session' as const, sessionId } : { kind: 'subagent' as const, ...child }
-      ctx.sidebarRight.openResourceIn(sessionId, planAddress({ session, callId }))
+    openPlan: (plan) => {
+      // The embedded single-column layout mounts no right Sidebar, so the plan
+      // goes to the VS Code window hosting the page instead of a column that is
+      // not there.
+      if (isVscodeEmbed()) {
+        void openDocumentInVscode({ title: plan.title, text: plan.markdown, language: 'markdown' })
+        return
+      }
+      openPlanAddress(sessionId, plan.callId)
     },
   })
   const reviewWindow = randomUUID()
@@ -83,9 +96,13 @@ export function apply(ctx: ClientContext): void {
     name: 'conversation.plan-review.actions', id: previewId, locale: NS, store: reviewStore,
     inject: (sessionId: SessionId): PlanReviewOpenInjected => ({
       openReview: (review, requestKey) => {
-        if (review.callId !== undefined) { open(sessionId).openPlan(review.callId); return }
+        if (isVscodeEmbed()) {
+          void openDocumentInVscode({ title: planTitle(review.plan), text: review.plan, language: 'markdown' })
+          return
+        }
+        if (review.callId !== undefined) { openPlanAddress(sessionId, review.callId); return }
         ctx.sidebarRight.openResourceIn(sessionId, reviewPreviewAddress(sessionId, `${reviewWindow}:${requestKey}`), {
-          params: { planReview: { markdown: review.plan, title: extractMarkdownPlainText(review.plan, { mode: 'first-line' }) } },
+          params: { planReview: { markdown: review.plan, title: planTitle(review.plan) } },
         })
       },
     }),

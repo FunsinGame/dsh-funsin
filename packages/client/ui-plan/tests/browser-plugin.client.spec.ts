@@ -1,9 +1,11 @@
+// @vitest-environment jsdom
 /**
  * ui-plan browser half on a real SlotRegistry: the plugin occupies the
  * conversation-declared `conversation.input.plan` single seat with the active
  * plan status chip; the injected face executes /plan off and folds admission
  * outcomes into null (admitted) or a user-visible failure line; teardown
- * empties the seat (HMR safety).
+ * empties the seat (HMR safety). Plan documents go to the right Sidebar, or to
+ * the hosting VS Code window while embedded.
  */
 import { ConversationEventRegistry } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { Context } from '@deepseek-ai/cordis'
@@ -37,6 +39,25 @@ function providePreview(ctx: Context) {
 }
 
 const SID = 's-plan' as SessionId
+
+/**
+ * Mark the page embedded and capture the documents it posts to the frame,
+ * answering each one the way the extension's webview frame does.
+ * @returns every posted command, in order.
+ */
+function answerEmbedDocument(): Record<string, unknown>[] {
+  document.documentElement.dataset.dshEmbed = '1'
+  const posted: Record<string, unknown>[] = []
+  vi.spyOn(window.parent, 'postMessage').mockImplementation((message: unknown) => {
+    const command = message as Record<string, unknown>
+    posted.push(command)
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { source: 'dsh-vscode', type: 'open-document-result', id: command['id'], ok: true },
+      source: window,
+    }))
+  })
+  return posted
+}
 
 async function bench() {
   const ctx = new Context()
@@ -135,7 +156,7 @@ describe('ui-plan browser apply', () => {
       const card = b.slots.entries('conversation.chat.turnTail')[0]!
       expect(card.component).toBe(PlanCards)
       const injected = (card.inject as unknown as (sessionId: SessionId) => PlanOpenInjected)(SID)
-      injected.openPlan(plan.callId)
+      injected.openPlan(plan)
       expect(b.openResourceIn).toHaveBeenLastCalledWith(SID, address)
       const review = b.slots.entries('conversation.plan-review.actions')[0]!
       expect(review.component).toBe(PlanReviewOpen)
@@ -144,7 +165,7 @@ describe('ui-plan browser apply', () => {
       reviewInjected.openReview(pending, 'question:1')
       expect(b.openResourceIn).toHaveBeenLastCalledWith(SID, address)
       b.subagentAddress.mockReturnValue({ parentSessionId: 'parent' as SessionId, childSessionId: SID, mode: 'continuable' })
-      injected.openPlan(plan.callId)
+      injected.openPlan(plan)
       expect(b.openResourceIn).toHaveBeenLastCalledWith(SID, 'dsh-resource://plan/subagent/parent/s-plan/continuable/call')
       reviewInjected.openReview(pending, 'question:1')
       expect(b.openResourceIn).toHaveBeenLastCalledWith(SID, 'dsh-resource://plan/subagent/parent/s-plan/continuable/call')
@@ -167,5 +188,34 @@ describe('ui-plan browser apply', () => {
       expect(b.slots.entries('sidebar.right.pane.tab')).toEqual([])
       expect(b.slots.entries('sidebar.right.pane.tab.title')).toEqual([])
     } finally { await fiber.dispose() }
+  })
+
+  it('hands plan documents to the hosting VS Code window while embedded', async () => {
+    const b = await bench()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    try {
+      await fiber.await()
+      const plan = submittedPlan({ type: 'tool/call', data: { callId: 'call', name: 'exit_plan_mode', arguments: '{"plan":"# Saved plan\\n\\nComplete body"}' } })!
+      const posts = answerEmbedDocument()
+      const card = b.slots.entries('conversation.chat.turnTail')[0]!
+      const injected = (card.inject as unknown as (sessionId: SessionId) => PlanOpenInjected)(SID)
+      injected.openPlan(plan)
+      expect(posts).toHaveLength(1)
+      expect(posts[0]).toMatchObject({
+        source: 'dsh-web', type: 'open-document', title: 'Saved plan', text: plan.markdown, language: 'markdown',
+      })
+      expect(typeof posts[0]?.['id']).toBe('string')
+      const review = b.slots.entries('conversation.plan-review.actions')[0]!
+      const reviewInjected = (review.inject as unknown as (sessionId: SessionId) => PlanReviewOpenInjected)(SID)
+      reviewInjected.openReview({ id: 'review', question: 'Approve?', plan: plan.markdown, callId: plan.callId, approve: { label: 'Approve' } }, 'question:1')
+      reviewInjected.openReview({ id: 'review', question: 'Approve?', plan: '# Temporary\n\nComplete body', approve: { label: 'Approve' } }, 'question:2')
+      expect(posts.map(post => post['title'])).toEqual(['Saved plan', 'Saved plan', 'Temporary'])
+      // The absent right Sidebar takes no part in the embedded routing.
+      expect(b.openResourceIn).not.toHaveBeenCalled()
+    } finally {
+      delete document.documentElement.dataset.dshEmbed
+      vi.restoreAllMocks()
+      await fiber.dispose()
+    }
   })
 })

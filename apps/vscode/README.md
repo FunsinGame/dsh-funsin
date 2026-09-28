@@ -6,12 +6,12 @@ The DeepSeek Harness VS Code extension: it boots the harness `web` profile on a 
 
 ## How it works
 
-1. On activation the extension registers a status bar item, an activity-bar **DeepSeek Harness** view, and commands (`Open`, `Open in Browser`, `Restart`, `Stop`, `发送到 DSH` for editor selections and file tabs).
+1. On activation the extension registers an activity-bar **DeepSeek Harness** view and commands (`Open`, `Open in Browser`, `Restart`, `Stop`, `发送到 DSH` for editor selections and file tabs). It also registers a status bar button reporting the harness state; `dsh.showStatusBar` turns that button on.
 2. Opening the view resolves the `dsh` CLI in this order: the `dsh.cliPath` setting, the `DSH_CLI` environment variable, the `apps/cli/lib/bin.js` build inside a source checkout, then `dsh` on `PATH`.
 3. It spawns `dsh --profile web --host 127.0.0.1 --port <dsh.port> --no-open` (port `0` requests an OS-assigned port, and `--no-open` keeps the default browser closed) with the first workspace folder as its working directory, then waits for the `dsh web: http://127.0.0.1:<port>/?token=...` readiness line.
 4. The view renders that URL in a full-size iframe. `Open in Browser` hands the same URL to `vscode.env.openExternal`. In embedded mode (`DSH_VSCODE=1`) the harness keeps the launch token in the iframe URL and accepts it on `/api` calls and the WebSocket mux, so the sidebar does not depend on cross-origin cookies.
 5. The extension also starts a token-protected loopback bridge and passes `DSH_VSCODE=1`, `DSH_VSCODE_BRIDGE`, and `DSH_VSCODE_BRIDGE_TOKEN` to the child. Harness plugins that detect the embedded mode can call `POST /open-file` and `POST /open-diff` on that bridge to open files/diffs in the current VS Code window instead of spawning a separate `code` process.
-6. Clicking a file in a conversation opens it in this window: the embedded single-column layout mounts no right Sidebar, so the page posts an `open-file` message through the webview frame, and the extension shows the path — resolved against the open workspace folders when it is relative — with `vscode.window.showTextDocument`, then answers the page with the outcome.
+6. Clicking a file in a conversation opens it in this window: the embedded single-column layout mounts no right Sidebar, so the page posts an `open-file` message through the webview frame, and the extension shows the path — resolved against the open workspace folders when it is relative — with `vscode.window.showTextDocument`, then answers the page with the outcome. A document with no file on disk travels the same way as `open-document`: the extension registers a `dsh-doc:` content provider, keeps the page's text under the tab name it derives from the requested title, and shows it as a read-only editor document, so a submitted plan opens where the right Sidebar would have. The tab keeps the page's language id, which is how a plan arrives highlighted as Markdown.
 
 ## Send to DeepSeek Harness
 
@@ -63,3 +63,4 @@ If the sidebar view shows the full browser layout instead of the embedded single
 | `dsh.cliPath` | `""` | Absolute path to the `dsh` CLI entry (`lib/bin.js`). Empty resolves `dsh` from `PATH`. |
 | `dsh.host` | `127.0.0.1` | Loopback bind host (only loopback is offered). |
 | `dsh.port` | `0` | Listen port; `0` requests an OS-assigned port. |
+| `dsh.showStatusBar` | `false` | Show the status bar button that reports the harness state and opens the view on click. |

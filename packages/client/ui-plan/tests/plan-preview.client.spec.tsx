@@ -133,7 +133,7 @@ describe('plan entry points and document', () => {
       expect(screen.getByText(dictionary['preview.action'])).toBeTruthy()
       expect(screen.queryByText('Implement')).toBeNull()
       fireEvent.click(screen.getByRole('button'))
-      expect(openPlan).toHaveBeenCalledWith(plan.callId)
+      expect(openPlan).toHaveBeenCalledWith(plan)
       expect(screen.getByText(plan.title)).toBeTruthy()
       view.unmount()
     }
@@ -156,7 +156,7 @@ describe('plan entry points and document', () => {
       expect.stringContaining(plan.title), expect.stringContaining(revised.title), expect.stringContaining(revised.title),
     ])
     fireEvent.click(screen.getAllByRole('button')[1]!)
-    expect(openPlan).toHaveBeenCalledWith('call:2')
+    expect(openPlan).toHaveBeenCalledWith(revised)
     view.rerender(<PlanCards {...{ ...props, useChat: planHook([]) }} />)
     expect(view.container.innerHTML).toBe('')
   })
