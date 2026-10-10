@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { TOOL_RUNTIME_SCHEDULER } from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { TOOL_RUNTIME_SCHEDULER, type ToolRuntimeScheduler } from '@deepseek-ai/dsh-tools'
 
 describe('TOOL_RUNTIME_SCHEDULER', () => {
   it('is drawn from the global symbol registry so copies compare equal', () => {
@@ -35,8 +35,10 @@ describe('TOOL_RUNTIME_SCHEDULER', () => {
     // through its own lookup of the registry key, not through this module's
     // binding. With a non-registered Symbol this is `undefined` and the
     // subsequent `.prepare` throws the production error.
+    // Each `Symbol.for` call carries its own `unique symbol` type, so the read
+    // goes through the runtime property lookup rather than an index expression.
     const viaIndependentLookup = Symbol.for('@deepseek-ai/dsh-tools.scheduler')
-    const scheduler = ctx.tools[viaIndependentLookup]
+    const scheduler = Reflect.get(ctx.tools, viaIndependentLookup) as ToolRuntimeScheduler
 
     expect(scheduler).toBeDefined()
     expect(typeof scheduler.prepare).toBe('function')
