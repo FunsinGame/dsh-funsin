@@ -1,0 +1,124 @@
+/*
+ * Frame-wide Workspace tab strip (the `shell.header` occupant). The bar is the
+ * chrome strip; the tab chips scroll horizontally while the add control stays
+ * pinned at the right edge, so adding a Workspace never requires scrolling to
+ * the end of a long tab list.
+ */
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  min-width: 0;
+  padding: 0 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.strip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.strip::-webkit-scrollbar {
+  display: none;
+}
+
+/* The slot wrapper carries the insertion marker: two tabs never share one. */
+.tabSlot {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  min-width: 0;
+}
+
+.tabSlot::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-state-business-primary);
+  opacity: 0;
+}
+
+.tabSlot.dropBefore::before {
+  left: -1px;
+  opacity: 1;
+}
+
+.tabSlot.dropAfter::before {
+  right: -1px;
+  opacity: 1;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 200px;
+  height: 26px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.tab:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* The current Workspace reads as a raised chip, not as a hover state. */
+.tabActive {
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+.tabActive:hover {
+  background: var(--dsw-alias-bg-base);
+}
+
+.tabDragging {
+  opacity: 0.5;
+}
+
+.tabLabel {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Pinned to the strip's right edge: `margin-left: auto` keeps it outside the
+   scrolled tab list. */
+.addButton {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.addButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}

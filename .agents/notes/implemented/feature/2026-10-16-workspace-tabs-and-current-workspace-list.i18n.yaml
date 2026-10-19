@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-16-workspace-tabs-and-current-workspace-list.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-16-workspace-tabs-and-current-workspace-list.md
+/agent-note-workspace-tabs-and-the-current-workspace-session-list:
+  en: 914052edfb6e3346
+  zh: 4a52109fc7b27328
+/agent-note-workspace-tabs-and-the-current-workspace-session-list/problem:
+  en: 9908c512c50b2334
+  zh: 1cd3a0a05e46bd6c
+/agent-note-workspace-tabs-and-the-current-workspace-session-list/decision:
+  en: 9af684b06a0b885d
+  zh: ce539111b0c43a94
+/agent-note-workspace-tabs-and-the-current-workspace-session-list/alternatives-considered:
+  en: 23d416a2151db52c
+  zh: 4be97c501cf3aa11
+/agent-note-workspace-tabs-and-the-current-workspace-session-list/consequences:
+  en: 54f057c3ac1e4cb8
+  zh: b443b7a9b51f8bfc

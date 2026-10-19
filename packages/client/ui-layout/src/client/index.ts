@@ -86,6 +86,14 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'rightbar': { kind: 'single'; scope: 'root'; owner: RightbarOwnerProps }
     /**
+     * Full-width header band above all three columns. Its rendered height
+     * pushes the columns down; empty content reserves no space. The occupant
+     * owns its height, its horizontal scrolling, and its controls, receives no
+     * Session binding, and stays mounted across main-panel navigation.
+     * OCCUPIED by ui-workspace's Workspace tabs.
+     */
+    'shell.header': { kind: 'single'; scope: 'root' }
+    /**
      * Full-width bottom content below all three columns. Its rendered height
      * reduces the columns' available height; empty content reserves no space.
      * The occupant owns its height, visibility, and controls. It receives no
@@ -182,6 +190,7 @@ export function apply(ctx: ClientContext): void {
         'sidebar': { kind: 'single', scope: 'root' },
         'main': { kind: 'keyed', scope: 'root' },
         'rightbar': { kind: 'single', scope: 'root' },
+        'shell.header': { kind: 'single', scope: 'root' },
         'shell.bottom': { kind: 'single', scope: 'root' },
         'shell.overlay': { kind: 'list', scope: 'root' },
         'shell.leading': { kind: 'single', scope: 'root' },

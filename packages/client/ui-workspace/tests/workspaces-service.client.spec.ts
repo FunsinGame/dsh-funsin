@@ -21,8 +21,7 @@ import type { DraftInitializationOptions, SessionInputResolver } from '@deepseek
 import type { RowToast } from '../src/client/contract/slots.ts'
 import { DirectoryBrowseError, UiWorkspaceService } from '../src/client/navigation.ts'
 import { en, zh } from '../src/client/locales.ts'
-import { createWorkspaceViewStore, FLAT_SESSION_ORDER_KEY } from '../src/client/stores.ts'
-import { UNGROUPED_KEY } from '../src/client/tree.ts'
+import { createWorkspaceViewStore } from '../src/client/stores.ts'
 
 const sid = (id: string): SessionId => SessionId(id)
 const wid = (id: string): WorkspaceId => id as WorkspaceId
@@ -302,6 +301,7 @@ function bench(options: BenchOptions = {}) {
   options.configureSessions?.(sessions)
   const view = createWorkspaceViewStore().create()
   const notify = vi.fn<(toast: RowToast) => void>()
+  const current = createSnapshotStore<WorkspaceId | undefined>(undefined)
   const uiWorkspace = new UiWorkspaceService(
     ctx,
     directoryPicker.remote,
@@ -309,8 +309,12 @@ function bench(options: BenchOptions = {}) {
     sessions,
     view.actions,
     notify,
+    current,
   )
-  return { ctx, directoryPicker, sessions, uiWorkspace, workspaces, layout, selectPanel, view, notify, requestDraftInitialization }
+  return {
+    ctx, directoryPicker, sessions, uiWorkspace, workspaces, layout, selectPanel, view, notify,
+    requestDraftInitialization, current,
+  }
 }
 
 function lastOpening(open: MockInstance<UiWorkspaceService['openWorkspace']>): Promise<void> {
@@ -435,6 +439,71 @@ describe('UiWorkspaceService', () => {
     b.sessions.retain.mockImplementationOnce(() => { throw new Error('open failed') })
     expect(() => { b.uiWorkspace.openSession(sid('target')) }).toThrow('open failed')
     expect(b.selectPanel).not.toHaveBeenCalled()
+  })
+
+  it('follows the Workspace of the Session opened from any surface', () => {
+    const b = bench({
+      workspaces: workspaceState([workspace('a', [sid('one')]), workspace('b', [sid('two')])]),
+      sessions: sessionState([summary('one', { updatedAt: 2 }), summary('two', { updatedAt: 1 })]),
+    })
+    // The registry's first Workspace is current until a Session says otherwise.
+    expect(b.current.getSnapshot()).toBe('a')
+    b.uiWorkspace.openSession(sid('two'))
+    expect(b.current.getSnapshot()).toBe('b')
+  })
+
+  it('falls back to the first Workspace when the current one leaves the registry', () => {
+    const b = bench({
+      workspaces: workspaceState([workspace('a', [sid('one')]), workspace('b', [sid('two')])]),
+      sessions: sessionState([summary('one', { updatedAt: 2 }), summary('two', { updatedAt: 1 })]),
+    })
+    b.uiWorkspace.openSession(sid('two'))
+    expect(b.current.getSnapshot()).toBe('b')
+    b.workspaces.list.update(state => ({
+      ...state,
+      items: state.items.filter(item => item.workspaceId !== wid('b')),
+    }))
+    expect(b.current.getSnapshot()).toBe('a')
+  })
+
+  it('switches to the most recent openable Session of the selected Workspace', () => {
+    const b = bench({
+      workspaces: workspaceState([
+        workspace('a', [sid('a-old'), sid('a-new')]),
+        workspace('b', [sid('b-one')]),
+      ]),
+      sessions: sessionState([
+        summary('a-old', { updatedAt: 1 }),
+        summary('a-new', { updatedAt: 5 }),
+        summary('b-one', { updatedAt: 9 }),
+      ]),
+    })
+    b.uiWorkspace.selectWorkspace(wid('a'))
+    expect(b.current.getSnapshot()).toBe('a')
+    expect(b.sessions.retain).toHaveBeenCalledExactlyOnceWith(sid('a-new'), { source: 'mainView' })
+    expect(b.selectPanel).toHaveBeenCalledWith(null)
+  })
+
+  it('skips archived members and connects a blank when the selected Workspace has none', async () => {
+    const b = bench({
+      workspaces: workspaceState([workspace('a', [sid('gone')])], [sid('gone')]),
+      sessions: sessionState([summary('gone', { updatedAt: 2 })]),
+    })
+    b.uiWorkspace.selectWorkspace(wid('a'))
+    // The Workspace is current immediately, before the Host answers the connect.
+    expect(b.current.getSnapshot()).toBe('a')
+    await vi.waitFor(() => {
+      expect(b.sessions.create).toHaveBeenCalledWith({ workspaceId: wid('a') })
+      expect(b.sessions.retain).toHaveBeenCalledWith(sid('created-a'), { source: 'mainView' })
+    })
+  })
+
+  it('ignores an unknown Workspace selection', () => {
+    const b = bench({ workspaces: workspaceState([workspace('a', [sid('one')])]) })
+    b.uiWorkspace.selectWorkspace(wid('missing'))
+    expect(b.current.getSnapshot()).toBe('a')
+    expect(b.sessions.create).not.toHaveBeenCalled()
+    expect(b.sessions.retain).not.toHaveBeenCalled()
   })
 
   it('releases a newly retained target when Workspace preparation throws', async () => {
@@ -595,7 +664,6 @@ describe('UiWorkspaceService', () => {
     expect(b.workspaces.pinCalls).toEqual([sid('three')])
     expect(b.view.getSnapshot().sessionOrderByAccount).toMatchObject({
       a: ['three', 'one', 'two'],
-      [FLAT_SESSION_ORDER_KEY]: ['three', 'one', 'two'],
     })
     // Unpin is a Host fact only: the saved positions do not move.
     await b.uiWorkspace.unpinSession(sid('three'))
@@ -617,12 +685,10 @@ describe('UiWorkspaceService', () => {
     b.workspaces.onPin = async (sessionId) => { await pending.promise; await hostPin(sessionId) }
     const pin = b.uiWorkspace.pinSession(sid('three'))
     b.view.actions.setSessionOrder('a', ['two', 'one', 'three'], {})
-    b.view.actions.setSessionOrder(FLAT_SESSION_ORDER_KEY, ['two', 'one', 'three'], {})
     pending.resolve(undefined)
     await pin
     expect(b.view.getSnapshot().sessionOrderByAccount).toMatchObject({
       a: ['three', 'two', 'one'],
-      [FLAT_SESSION_ORDER_KEY]: ['three', 'two', 'one'],
     })
   })
 
@@ -638,11 +704,9 @@ describe('UiWorkspaceService', () => {
     b.workspaces.list.update(state => ({ ...state, items: [] }))
     pending.resolve(undefined)
     await pin
-    expect(b.view.getSnapshot().sessionOrderByAccount).not.toHaveProperty('a')
-    expect(b.view.getSnapshot().sessionOrderByAccount).toMatchObject({
-      [UNGROUPED_KEY]: ['two', 'one'],
-      [FLAT_SESSION_ORDER_KEY]: ['two', 'one'],
-    })
+    // No account survives the removal: every saved order is rewritten from the
+    // membership the pin actually completed against.
+    expect(b.view.getSnapshot().sessionOrderByAccount).toEqual({})
   })
 
   it('keeps saved Workspace members whose summaries are temporarily missing when pinning in Last updated', async () => {

@@ -12,7 +12,7 @@ import type {
 } from '@deepseek-ai/dsh-api-session-controller/client'
 // Type-only: pulls the `agentPreset` Session projection value into this program.
 import type {} from '@deepseek-ai/dsh-agent-preset-registry/types'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type {
   IWorkspaces, WorkspaceId, WorkspaceSnapshot, WorkspaceView,
@@ -57,6 +57,14 @@ export interface UiWorkspace {
     beforeOpen?: (sessionId: SessionId) => void,
     options?: Pick<StartSessionOptions, 'agentPreset'>,
   ): Promise<void>
+  /**
+   * Make one Workspace current: show its most recent openable Session, or
+   * connect a blank one when it has none. The current-Workspace fact is
+   * published immediately, so the switching surface responds before the Host
+   * answers; a failed connection leaves the selection unchanged.
+   * @param workspaceId - target Workspace.
+   */
+  selectWorkspace(workspaceId: WorkspaceId): void
   /**
    * Fork a Session without changing the current selection.
    * @param sessionId - source Session.
@@ -168,6 +176,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
    * @param sessions - pure Session Controller.
    * @param view - the browser's viewing-store write set (one instance shared with its registration).
    * @param notify - show one notice through the Workspace notice channel.
+   * @param current - the current-Workspace source the tabs and the session list render (created by the apply body, written here).
    */
   constructor(
     ctx: Context,
@@ -176,18 +185,47 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     private readonly sessions: ISessions,
     private readonly view: Pick<WorkspaceViewStoreActions, 'pinSessionOrder'>,
     private readonly notify: (toast: RowToast) => void,
+    private readonly current: SnapshotStore<WorkspaceId | undefined>,
   ) {
     super(ctx, 'uiWorkspace')
     ctx.effect(() => {
       const stop = this.watchNavigation()
+      const stopCurrent = this.watchCurrentWorkspace()
       return () => {
         stop()
+        stopCurrent()
         this.lifetime.abort()
         const reference = this.mainReference
         this.mainReference = undefined
         reference?.release()
       }
     }, 'ui-workspace: Workspace navigation policy')
+  }
+
+  selectWorkspace(workspaceId: WorkspaceId): void {
+    const state = this.workspaces.list.getSnapshot()
+    const workspace = state.items.find(item => item.workspaceId === workspaceId)
+    if (workspace === undefined) return
+    this.current.set(workspaceId)
+    const sessions = this.sessions.list.getSnapshot()
+    const archived = new Set(state.archivedSessionIds)
+    let recent: SessionId | undefined
+    let recentAt = Number.NEGATIVE_INFINITY
+    for (const sessionId of workspace.sessionIds) {
+      const summary = sessions.byId[sessionId]
+      if (summary === undefined || archived.has(sessionId)) continue
+      if (recent === undefined || summary.updatedAt > recentAt) {
+        recent = sessionId
+        recentAt = summary.updatedAt
+      }
+    }
+    if (recent !== undefined) {
+      this.replaceMain(recent, this.lifetime.signal, 'reveal')
+      return
+    }
+    void this.openWorkspace(workspaceId).catch((reason: unknown) => {
+      console.warn('workspace switch failed:', reason)
+    })
   }
 
   connectWorkspace(workspaceId: WorkspaceId, options: Pick<StartSessionOptions, 'agentPreset'> = {}): Promise<SessionId> {
@@ -525,7 +563,38 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     const previous = this.mainReference
     this.mainReference = reference
     previous?.release()
+    this.publishCurrent(reference.sessionId)
     if (panel === 'reveal') this.ctx.layout.selectPanel(null)
+  }
+
+  /**
+   * Publish the Workspace owning the selected Session. A Session outside every
+   * Workspace (recorded before its registration, or after its registration was
+   * closed) publishes nothing, so the surface keeps its last current Workspace.
+   * @param sessionId - the selected Session.
+   */
+  private publishCurrent(sessionId: SessionId): void {
+    const owner = this.workspaces.list.getSnapshot().items
+      .find(item => item.sessionIds.includes(sessionId))
+    if (owner !== undefined) this.current.set(owner.workspaceId)
+  }
+
+  /**
+   * Keep the published current Workspace inside the registry: a closed or
+   * deleted Workspace falls back to the first registered one, and an empty
+   * registry publishes none.
+   * @returns the Workspace list unsubscribe function.
+   */
+  private watchCurrentWorkspace(): () => void {
+    const reconcile = (): void => {
+      const items = this.workspaces.list.getSnapshot().items
+      const current = this.current.getSnapshot()
+      if (current !== undefined && items.some(item => item.workspaceId === current)) return
+      this.current.set(items[0]?.workspaceId)
+    }
+    const dispose = this.workspaces.list.subscribe(reconcile)
+    reconcile()
+    return dispose
   }
 
 }

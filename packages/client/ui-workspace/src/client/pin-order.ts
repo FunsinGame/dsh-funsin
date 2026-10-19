@@ -6,8 +6,7 @@
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { FLAT_SESSION_ORDER_KEY } from './stores.ts'
-import { owningGroupKey, sessionMemberIds, type SessionRowState, UNGROUPED_KEY } from './tree.ts'
+import type { SessionRowState } from './tree.ts'
 
 /** What `pinSessionOrder` reconciles a pinned Session's accounts against. */
 export interface PinOrderSource {
@@ -17,7 +16,8 @@ export interface PinOrderSource {
 }
 
 /**
- * Every account's complete membership: each Workspace, Ungrouped, and the flat list.
+ * Every account's complete membership: one per Workspace. Sessions outside
+ * every Workspace have no list surface left to lead.
  * @param workspaces - current Host Workspaces.
  * @param list - current Session list snapshot.
  * @param rowState - registry-global pin and archive sets.
@@ -28,24 +28,20 @@ export function pinOrderSource(
   list: SessionListState,
   rowState: PinOrderSource['rowState'],
 ): PinOrderSource {
-  const accounted = new Set(workspaces.flatMap(workspace => workspace.sessionIds))
   return {
-    members: Object.fromEntries([
-      ...workspaces.map(workspace => [workspace.workspaceId, workspace.sessionIds] as const),
-      [UNGROUPED_KEY, list.ids.filter(id => list.byId[id] !== undefined && !accounted.has(id))],
-      [FLAT_SESSION_ORDER_KEY, sessionMemberIds(list)],
-    ]),
+    members: Object.fromEntries(workspaces.map(workspace => [workspace.workspaceId, workspace.sessionIds] as const)),
     summaries: list.byId,
     rowState,
   }
 }
 
 /**
- * The accounts a pinned Session leads: its group (or Ungrouped) and the flat list.
+ * The account a pinned Session leads: the Workspace that accounts for it.
  * @param workspaces - current Host Workspaces.
  * @param sessionId - the Session being pinned.
  * @returns the account keys `pinSessionOrder` fronts.
  */
 export function pinOrderAccounts(workspaces: readonly WorkspaceView[], sessionId: SessionId): readonly string[] {
-  return [owningGroupKey(workspaces, sessionId), FLAT_SESSION_ORDER_KEY]
+  const owner = workspaces.find(workspace => workspace.sessionIds.includes(sessionId))
+  return owner === undefined ? [] : [owner.workspaceId]
 }

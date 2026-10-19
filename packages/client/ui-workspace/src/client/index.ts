@@ -1,23 +1,24 @@
 /**
- * Workspace plugin, browser half. Two registrations: WorkspaceBrowser fills
- * the sidebar shell's `sidebar.workspaces` hole (the whole browsing region),
- * and WorkspacePicker fills the conversation hero's picker hole
- * (`conversation.hero.workspace` — both hero forms). Both read real Host
- * Workspaces through the global useWorkspaces hook, and each declares its
- * own `single` directory-flow child hole for the composed picker package's
- * client half. WorkspaceBrowser additionally declares the two Session row
- * action lists, and this apply registers the shipped actions — pin, rename,
- * fork, archive, copy ID — into them the way any client plugin would, each
- * with its own behavior, plus the dialogs and the row-action notice into
- * `shell.overlay` (see the contract module doc). It also declares two
- * Session-row seats: the leading decoration a row renders only while its own
- * primary state is idle, and the section the row's hover card renders between
- * its relative time and its trailing status line. Export discipline:
- * packages/client/AGENTS.md.
+ * Workspace plugin, browser half. Three registrations: WorkspaceTabs fills the
+ * frame's `shell.header` band (the Workspace inventory: switch, reorder,
+ * close, add), WorkspaceBrowser fills the sidebar shell's
+ * `sidebar.workspaces` hole with the current Workspace's Session list, and
+ * WorkspacePicker fills the conversation hero's picker hole
+ * (`conversation.hero.workspace` — both hero forms). Each reads real Host
+ * Workspaces through the global useWorkspaces hook, and each surface that
+ * adds a Workspace declares its own `single` directory-flow child hole for
+ * the composed picker package's client half. WorkspaceBrowser additionally
+ * declares the two Session row action lists, and this apply registers the
+ * shipped actions — pin, rename, fork, archive, copy ID — into them the way
+ * any client plugin would, each with its own behavior, plus the dialogs and
+ * the row-action notice into `shell.overlay` (see the contract module doc).
+ * It also declares two Session-row seats: the leading decoration a row
+ * renders only while its own primary state is idle, and the section the row's
+ * hover card renders between its relative time and its trailing status line.
+ * Export discipline: packages/client/AGENTS.md.
  */
 import type {} from '@deepseek-ai/dsh-client-product-analytics/client'
 import type { Context } from '@deepseek-ai/cordis'
-import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ISessions, SessionForkError } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
   IWorkspaces, SessionActivity, WorkspaceArchiveError, WorkspaceId, WorkspaceSnapshot,
@@ -29,6 +30,8 @@ import type { HostObservable, SnapshotSelectorHook } from '@deepseek-ai/dsh-clie
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 // Type-only: pulls the Controller service merges.
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
+// Type-only: pulls the generated Session Remote namespace into ClientRemote.
+import type {} from '@deepseek-ai/dsh-api-session-controller/remote'
 import type {} from '@deepseek-ai/dsh-api-workspace-controller/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -41,12 +44,13 @@ import {
   type ArchiveSessionInjected, type ForkSessionInjected, menuOpenStateFactory, type PinSessionInjected,
   type SessionArchiveConfirmInjected, type SessionArchiveConfirmRequest,
   type RenameSessionInjected, type RowToast, type RowToastInjected, type RowToastState, type SessionRenameDialogInjected,
-  type SessionIdInjected, type WorkspaceBrowserInjected, type WorkspacePickerInjected,
+  type SessionIdInjected, type WorkspaceBrowserInjected, type WorkspacePickerInjected, type WorkspaceTabsInjected,
 } from './contract/slots.ts'
 import { createWorkspaceShortcutControls, installWorkspaceShortcuts } from './shortcuts.ts'
 import { UiWorkspaceService } from './navigation.ts'
 import { createWorkspaceViewStore } from './stores.ts'
 import { WorkspaceBrowser } from './rows/WorkspaceBrowser.tsx'
+import { WorkspaceTabs } from './tabs/WorkspaceTabs.tsx'
 import { ArchiveSessionMenuItem, ArchiveSessionRowButton, SessionArchiveConfirmDialog } from './session-actions/ArchiveSession.tsx'
 import { derive } from './session-actions/derived.ts'
 import { ForkSessionMenuItem } from './session-actions/ForkSession.tsx'
@@ -60,11 +64,10 @@ import { en, zh, type WorkspaceKey } from './locales.ts'
 
 export type { StartSessionOptions, UiWorkspace } from './navigation.ts'
 export type {
-  DirectoryFlowOwnerProps, DirectoryFlowSlotName, DirectoryPickingHooks, DirectoryPickingInjected,
-  MenuOpenState, RowToast, SessionRenameTarget, SessionRowOwnerProps, UseMenuOpenState, WorkspaceBrowserInjected,
-  SessionRowScheduleOwnerProps,
-  WorkspaceBrowserProps,
-  WorkspacePickerInjected, WorkspacePickerProps,
+  CurrentWorkspaceInjected, DirectoryFlowOwnerProps, DirectoryFlowSlotName, DirectoryPickingHooks,
+  DirectoryPickingInjected, MenuOpenState, RowToast, SessionRenameTarget, SessionRowOwnerProps, UseMenuOpenState,
+  WorkspaceBrowserInjected, SessionRowScheduleOwnerProps, WorkspaceBrowserProps, WorkspacePickerInjected,
+  WorkspacePickerProps, WorkspaceTabsInjected, WorkspaceTabsProps,
 } from './contract/slots.ts'
 export type { WorkspaceKey } from './locales.ts'
 
@@ -100,7 +103,8 @@ const NS = 'workspace'
  * declaration through `slots.inject()` instead of assuming order.
  */
 export const inject = [
-  'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'layout', 'shortcuts', 'remoteAccess',
+  'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'remote.session', 'layout',
+  'shortcuts', 'remoteAccess',
 ]
 
 /**
@@ -121,8 +125,11 @@ export function apply(ctx: Context): void {
   const rowToast = createSnapshotStore<RowToastState | null>(null)
   let toastSeq = 0
   const notify = (toast: RowToast): void => { rowToast.set({ ...toast, seq: ++toastSeq }) }
+  // The current-Workspace fact both browsing surfaces render: written by the
+  // service at each navigation, read through each registration's bound hook.
+  const currentWorkspace = createSnapshotStore<WorkspaceId | undefined>(undefined)
   const uiWorkspace = new UiWorkspaceService(
-    ctx, ctx.remote.directoryPicker, workspaces, sessions, viewInstance.actions, notify,
+    ctx, ctx.remote.directoryPicker, workspaces, sessions, viewInstance.actions, notify, currentWorkspace,
   )
   ctx.slots.provideRoot({
     hooks: { workspaces: workspaces.list },
@@ -143,15 +150,11 @@ export function apply(ctx: Context): void {
 
   // Stable per-surface occupancy sources (the renderer's hook cache keys by
   // source identity): true while the surface's directory-flow hole is filled.
-  const flowSource = (hole: 'sidebar.workspaces.directoryFlow' | 'conversation.hero.workspace.directoryFlow'): HostObservable<boolean> => ({
+  const flowSource = (hole: 'shell.header.directoryFlow' | 'conversation.hero.workspace.directoryFlow'): HostObservable<boolean> => ({
     getSnapshot: () => ctx.slots.entries(hole).length > 0,
     subscribe: listener => ctx.slots.subscribe(hole, listener),
   })
-  const browserFlowSource = flowSource('sidebar.workspaces.directoryFlow')
-  const hostInfo: HostObservable<RemoteHostFacts> = {
-    getSnapshot: () => ctx.remote.$host,
-    subscribe: listener => ctx.on('connection/reset', listener),
-  }
+  const tabsFlowSource = flowSource('shell.header.directoryFlow')
   const pickerFlowSource = flowSource('conversation.hero.workspace.directoryFlow')
   const openSession: WorkspaceBrowserInjected['open'] = (sessionId) => {
     uiWorkspace.openSession(sessionId)
@@ -262,38 +265,78 @@ export function apply(ctx: Context): void {
     dismissToast: () => { rowToast.set(null) },
   })
   const browserInjected = (): WorkspaceBrowserInjected => ({
-    // Explicit group actions keep their target; unscoped New Session inherits
-    // the current Session Workspace before the recent-Workspace fallback.
-    startSession: (workspaceId, options) => { uiWorkspace.startSession(workspaceId, options) },
+    // Applies to the current Workspace's list: a row's own Workspace is the
+    // current one.
     open: openSession,
     searchSessions,
     searchResultLimit: sessions.searchResultLimit,
     requestSessionRename,
     notifyArchivedNotOpenable: () => { notify({ kind: 'archivedNotOpenable' }) },
     renameWorkspace: async (workspaceId, title) => { await workspaces.rename(workspaceId, title) },
-    deleteWorkspace: async (workspaceId) => { await workspaces.delete(workspaceId) },
-    insertWorkspaceBefore: async (workspaceId, beforeWorkspaceId) => {
+    unarchiveSession: async (sessionId) => { await uiWorkspace.unarchiveSession(sessionId) },
+    requestSearch: shortcutControls.search,
+    hooks: {
+      currentWorkspace,
+      workspaceShortcuts: shortcutControls.state,
+      shortcuts: ctx.shortcuts.catalog,
+    },
+  })
+  const tabsInjected = (): WorkspaceTabsInjected => ({
+    selectWorkspace: (workspaceId) => { uiWorkspace.selectWorkspace(workspaceId) },
+    reorderWorkspace: async (workspaceId, beforeWorkspaceId) => {
       await workspaces.insertBefore(workspaceId, beforeWorkspaceId)
     },
-    unarchiveSession: async (sessionId) => { await uiWorkspace.unarchiveSession(sessionId) },
+    // Closing removes the registration only: the directory and every Session
+    // log stay, so the same folder can be added again.
+    closeWorkspace: async (workspaceId) => { await workspaces.delete(workspaceId) },
     createWorkspace: input => workspaces.create(input),
-    requestSearch: shortcutControls.search,
     requestAddWorkspace: shortcutControls.add,
     closeAddWorkspace: shortcutControls.closeAdd,
     setDirectoryBusy: shortcutControls.directoryBusy,
-    hooks: { directoryFlow: browserFlowSource, hostInfo, workspaceShortcuts: shortcutControls.state, shortcuts: ctx.shortcuts.catalog },
+    // The Session Remote owns the verified-host-path opener the desktop uses:
+    // it maps the Workspace directory through the composed filesystem before
+    // handing it to Explorer/Finder, so the tab menu never guesses at a path.
+    canOpenWorkspaceFolder: async () => {
+      try {
+        const result = await ctx.remote.session.canOpenWorkspacePath()
+        return result.ok && result.value
+      } catch {
+        // An unreachable Host reads as no desktop, so the row stays out of the menu.
+        return false
+      }
+    },
+    openWorkspaceFolder: async (path) => {
+      const result = await ctx.remote.session.openWorkspacePath({ path })
+      if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
+    },
+    notify,
+    hooks: {
+      currentWorkspace,
+      directoryFlow: tabsFlowSource,
+      workspaceShortcuts: shortcutControls.state,
+    },
   })
   const pickerInjected = (): WorkspacePickerInjected => ({
     createWorkspace: input => workspaces.create(input),
     hooks: { directoryFlow: pickerFlowSource },
   })
+  // The Workspace inventory lives in the frame's header band: one tab per
+  // registration, the current one selected, closed, reordered, and added there.
+  ctx.slots.inject('shell.header', () => ctx.slots.register(
+    {
+      name: 'shell.header',
+      children: { 'shell.header.directoryFlow': { kind: 'single', scope: 'root' } },
+      inject: tabsInjected,
+      locale: NS,
+    },
+    WorkspaceTabs,
+  ))
   // Each registration declares its owned children in the same call; slot
   // injection follows both the owner and declaration HMR lifetimes.
   ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register(
     {
       name: 'sidebar.workspaces',
       children: {
-        'sidebar.workspaces.directoryFlow': { kind: 'single', scope: 'root' },
         // Every row entry reads the menu's open state through a hook bound
         // from the row's render occurrence (the owner passes the state pair
         // as hookContext).

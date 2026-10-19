@@ -3,44 +3,44 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-workspace/README.md
 /:
-  en: 7c0f613105d4008a
-  zh: c36c0cdff7e77576
+  en: 06861eea99ef90c1
+  zh: 74a42122c2d24a7d
 /deepseek-ai-dsh-client-ui-workspace:
   en: b286adf3aca51710
   zh: 6122f6e7c8015197
 /deepseek-ai-dsh-client-ui-workspace/summary:
-  en: 1a76ace6a18e3ab5
-  zh: b274d1e98e133851
+  en: 9dd456ea78706c39
+  zh: af9eab1a6c3914df
 /deepseek-ai-dsh-client-ui-workspace/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-client-ui-workspace/use-this-package:
-  en: d042b4b1dd7e7f56
-  zh: c12fa070ef5a02a4
+  en: 7a3471b64aa6e4e9
+  zh: 904b32d5c034b552
 /deepseek-ai-dsh-client-ui-workspace/use-this-package/reordering-and-view-options:
-  en: 8673afc1d72ad077
-  zh: 9fbb83a4029c5d10
-/deepseek-ai-dsh-client-ui-workspace/use-this-package/workspace-hierarchy:
-  en: 5e049b90c55eddb3
-  zh: e06dc8d0d25c013f
+  en: 0e0834bc8d4b17d0
+  zh: dad720d02ab323c1
+/deepseek-ai-dsh-client-ui-workspace/use-this-package/workspace-tabs:
+  en: 56e2a15ac3f8cef8
+  zh: 479bab8b9eba485f
 /deepseek-ai-dsh-client-ui-workspace/use-this-package/search:
-  en: 9eab3bfbaf98c987
-  zh: 54e7e141dae5c9e8
+  en: 8665e945b105d345
+  zh: 425111b31a40c403
 /deepseek-ai-dsh-client-ui-workspace/use-this-package/managing-sessions:
-  en: e96b714aeb6dcd03
-  zh: 75b63aa2cafbb57a
+  en: 3b9df4de96c7b44b
+  zh: 4d811d6735f6c5ab
 /deepseek-ai-dsh-client-ui-workspace/use-this-package/pending-interactions:
   en: 9fb88260380bf093
   zh: 3bace2b96ecd4a82
 /deepseek-ai-dsh-client-ui-workspace/use-this-package/active-schedule-markers:
-  en: 8d82539e4e4e890d
+  en: bbc0121f50671aab
   zh: 7b97a3927de90ea8
 /deepseek-ai-dsh-client-ui-workspace/understand-the-implementation:
-  en: 721d5a49fe231191
+  en: 0102e0226c36de6b
   zh: 3ef1dd720219e00e
 /deepseek-ai-dsh-client-ui-workspace/understand-the-implementation/the-directory-flow-hole:
-  en: 868904dbfb5713f8
-  zh: 225906bfef7398bf
+  en: 249c174abf846743
+  zh: cc93eb69949d5abe
 /deepseek-ai-dsh-client-ui-workspace/understand-the-implementation/session-row-actions:
   en: 5bbba6e462faf3dc
   zh: 4734263208ee07c9
@@ -51,8 +51,8 @@
   en: ad4a333892f2fe92
   zh: 3a670fd401f4d7a7
 /deepseek-ai-dsh-client-ui-workspace/understand-the-implementation/view-state:
-  en: 83031e7505fc228a
-  zh: 03e17c9428fe29fd
+  en: b3d40929ff6cc538
+  zh: 5d814726336bfe4f
 /deepseek-ai-dsh-client-ui-workspace/understand-the-implementation/hover-cards:
   en: ea89ec5a3ee1f167
   zh: e11f350571bcfff7
@@ -66,8 +66,8 @@
   en: ca75c51c89c2c9b0
   zh: de54f3467ef3b9be
 /deepseek-ai-dsh-client-ui-workspace/known-limitations-and-deferred-work:
-  en: 00d7b1ddda7390f5
-  zh: 1e5a1055d1be4d1d
+  en: 7864b778c793751a
+  zh: 7bcba370d4efbd24
 /deepseek-ai-dsh-client-ui-workspace/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

@@ -1,7 +1,9 @@
 .frame {
   position: relative; /* anchors the drag handles, which straddle column borders */
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  /* header band | the three columns | bottom band. An unoccupied header or
+     bottom row renders empty content, so `auto` resolves to zero height. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100%;
   overflow: hidden;
   background: var(--dsw-alias-bg-base);
@@ -222,7 +224,7 @@
    over the centre. */
 .handle {
   position: absolute;
-  grid-area: 1 / 1 / 2 / -1;
+  grid-area: 2 / 1 / 3 / -1;
   top: 0;
   bottom: 0;
   width: 8px;
@@ -276,6 +278,15 @@
   min-height: 0;
   overflow: auto;
   background: var(--dsw-alias-bg-base);
+}
+
+/* Frame-wide header band above every column. It carries the chrome fill so the
+   band reads as one strip across the window; the occupant draws its own
+   divider and owns its height, so an empty seat reserves nothing. */
+.headerRow {
+  grid-column: 1 / -1;
+  min-width: 0;
+  background: var(--dsw-specific-sidebar-fill);
 }
 
 .overlayLayer {

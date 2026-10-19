@@ -284,16 +284,17 @@ describe('Windows caption tooltips', () => {
     act(() => { vi.advanceTimersByTime(500) })
   }
 
-  it.each([false, true])(
-    'drops the sidebar toggle bubble below the caption (collapsed=%s)',
-    (collapsed) => {
-      vi.useFakeTimers()
-      document.documentElement.setAttribute('data-windows-titlebar', '')
-      mountShell({ collapsed, width: collapsed ? 0 : 300 })
-      hover(screen.getByRole('button', { name: collapsed ? 'Open sidebar' : 'Collapse sidebar' }))
-      expect(screen.getByRole('tooltip').getAttribute('data-side')).toBe('bottom')
-    },
-  )
+  it('hides the collapse control in the expanded caption and keeps the expand control when collapsed', () => {
+    vi.useFakeTimers()
+    document.documentElement.setAttribute('data-windows-titlebar', '')
+    const shell = mountShell()
+    // The clean caption carries the brand and the menus only.
+    expect(screen.queryByRole('button', { name: 'Collapse sidebar' })).toBeNull()
+    shell.rerender({ collapsed: true, width: 0 })
+    const expand = screen.getByRole('button', { name: 'Open sidebar' })
+    hover(expand)
+    expect(screen.getByRole('tooltip').getAttribute('data-side')).toBe('bottom')
+  })
 
   it('drops the collapsed New Session bubble below the caption as well', () => {
     vi.useFakeTimers()
@@ -308,6 +309,36 @@ describe('Windows caption tooltips', () => {
     mountShell({ collapsed: true, width: 0 })
     hover(screen.getByRole('button', { name: 'Open sidebar' }))
     expect(screen.getByRole('tooltip').getAttribute('data-side')).toBe('right')
+  })
+})
+
+describe('Windows caption brand', () => {
+  afterEach(() => { document.documentElement.removeAttribute('data-windows-titlebar') })
+
+  it('moves the wordmark into the caption and reserves its width for the caption controls', () => {
+    document.documentElement.setAttribute('data-windows-titlebar', '')
+    const shell = mountShell()
+    const caption = document.querySelector('[data-windows-caption-brand]')
+    expect(caption?.textContent).toContain('Custom Brand')
+    expect(caption?.querySelector('[data-testid="custom-brand-mark"]')).not.toBeNull()
+    // The wordmark is no longer a sidebar New Session button; the capsule is.
+    expect(screen.getAllByRole('button', { name: 'New session' })).toHaveLength(1)
+    // The expanded caption is clean: no sidebar collapse control.
+    expect(screen.queryByRole('button', { name: 'Collapse sidebar' })).toBeNull()
+    // The measured wordmark box publishes both caption insets (jsdom reports a
+    // zero-width box, so only their relationship is asserted).
+    const expandedStart = Number.parseInt(document.documentElement.style.getPropertyValue('--dsh-windows-menu-start'), 10)
+    const controlsStart = Number.parseInt(document.documentElement.style.getPropertyValue('--dsh-windows-caption-controls-start'), 10)
+    expect(expandedStart).toBe(controlsStart)
+    // The collapsed caption adds the expand control and New Session between the brand and the menus.
+    shell.rerender({ collapsed: true, width: 0 })
+    expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeTruthy()
+    const collapsedStart = Number.parseInt(document.documentElement.style.getPropertyValue('--dsh-windows-menu-start'), 10)
+    expect(collapsedStart - expandedStart).toBe(72)
+    // The chrome insets leave with the shell.
+    cleanup()
+    expect(document.documentElement.style.getPropertyValue('--dsh-windows-menu-start')).toBe('')
+    expect(document.documentElement.style.getPropertyValue('--dsh-windows-caption-controls-start')).toBe('')
   })
 })
 

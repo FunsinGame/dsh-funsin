@@ -1,26 +1,29 @@
 /**
- * ui-workspace contracts. Two registrations share this package:
+ * ui-workspace contracts. Three registrations share this package:
  *
- * - WorkspaceBrowser fills the sidebar shell's `sidebar.workspaces` hole —
- *   the whole browsing region (section header, search, grouped/flat session
- *   list, workspace dialogs). It registers this package's viewing store and
- *   consumes the shell's two-fact owner share (wide / expandSidebar).
+ * - WorkspaceTabs fills the frame's `shell.header` band — the horizontal
+ *   Workspace tab strip that switches the current Workspace, reorders the
+ *   registry by drag, closes a Workspace registration from its context menu,
+ *   and adds one through the composed directory flow.
+ * - WorkspaceBrowser fills the sidebar shell's `sidebar.workspaces` hole with
+ *   the current Workspace's Session list (section header, search, list, row
+ *   menus). It registers this package's viewing store and consumes the
+ *   shell's two-fact owner share (wide / expandSidebar).
  * - WorkspacePicker fills the conversation empty-state hole (menu + error
- *   dialog shared with the browser).
+ *   dialog).
  *
- * Both registrations declare a **directory-flow hole** (`single` kind): the
- * slot a composed picker package's client half fills with its
- * picking interaction — a renderless native-chooser driver or an in-app
- * browsing dialog. ui-workspace owns the trigger (the "Add workspace…"
- * entry, present only while the hole is occupied) and the adoption
- * semantics (`createWorkspace({ path })`, the retryable error dialog,
- * Choose again); the occupant owns everything between `open` and the picked path,
- * including creating a new directory to hand back. That occupant-owned
- * creation is why adding a workspace has a single route: an unoccupied hole
- * leaves the surface with no add affordance at all.
- * Two holes exist because the two menu surfaces are independent slot entries
- * and a hole has exactly one declaring entry — they carry the same owner
- * contract and the same occupant.
+ * Each surface that adds a Workspace declares a **directory-flow hole**
+ * (`single` kind): the slot a composed picker package's client half fills with
+ * its picking interaction — a renderless native-chooser driver or an in-app
+ * browsing dialog. ui-workspace owns the trigger (the tab strip's add control,
+ * the empty-state "Add workspace…" entry, present only while the hole is
+ * occupied) and the adoption semantics (`createWorkspace({ path })`, the
+ * retryable error dialog, Choose again); the occupant owns everything between
+ * `open` and the picked path, including creating a new directory to hand back.
+ * That occupant-owned creation is why adding a workspace has a single route:
+ * an unoccupied hole leaves the surface with no add affordance at all.
+ * One hole per surface exists because a hole has exactly one declaring entry —
+ * they carry the same owner contract and the same occupant.
  *
  * WorkspaceBrowser also declares the two **Session row action lists**: every
  * row of a Session's "..." menu is an entry of
@@ -47,12 +50,10 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { SessionSearchResultItem } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionActivity, WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { WorkspaceShortcutState } from '../shortcuts.ts'
-import type { StartSessionOptions } from '../navigation.ts'
 import type {} from './toast.ts'
 import type { createWorkspaceViewStore } from '../stores.ts'
 
@@ -117,8 +118,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /** Directory-flow hole under the conversation empty-state picker (declared by the WorkspacePicker entry). */
     'conversation.hero.workspace.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
-    /** Directory-flow hole under the sidebar browsing region (declared by the WorkspaceBrowser entry). */
-    'sidebar.workspaces.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
+    /** Directory-flow hole under the Workspace tab strip (declared by the WorkspaceTabs entry). */
+    'shell.header.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
     /**
      * Leading decoration of one Session row, in the 16px cell before the title
      * that the row's own state dot otherwise occupies. A higher-priority state
@@ -190,10 +191,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** The two directory-flow holes; a flow package's client half registers its one component into both. */
+/** The directory-flow holes; a flow package's client half registers its one component into every hole. */
 export type DirectoryFlowSlotName =
   | 'conversation.hero.workspace.directoryFlow'
-  | 'sidebar.workspaces.directoryFlow'
+  | 'shell.header.directoryFlow'
 
 /**
  * Directory-picking share both trigger surfaces consume. Occupancy rides the
@@ -213,36 +214,84 @@ export type DirectoryPickingInjected = {
 export type DirectoryPickingHooks = PropsHooks<DirectoryPickingInjected['hooks']>
 
 /**
- * Browser-private injected share (arrives via the register inject factory).
- * Data reads use the global framework hooks; these are the Host actions the
- * browsing region drives.
+ * Current-Workspace share of every browsing surface: the Workspace the tab
+ * strip selects and the sidebar lists. Published by the UiWorkspace service at
+ * each navigation, so a Session opened from search, a row, or the tab strip
+ * lands on the same current Workspace.
  */
-export type WorkspaceBrowserInjected = {
-  hooks: DirectoryPickingInjected['hooks'] & {
-    /**
-     * Fixed Host facts, reached through a hook rather than injected as values:
-     * the renderer memoizes an entry's inject result for the registration's
-     * lifetime, so facts read there would freeze at whatever the first render
-     * saw. Select the field the surface needs (`info => info.home`).
-     */
-    hostInfo: HostObservable<RemoteHostFacts>
-    workspaceShortcuts: HostObservable<WorkspaceShortcutState>
-    shortcuts: HostObservable<readonly ShortcutCatalogEntry[]>
+export type CurrentWorkspaceInjected = {
+  hooks: {
+    /** The current Workspace, or undefined while the registry has none. */
+    currentWorkspace: HostObservable<WorkspaceId | undefined>
   }
-  /** Open the browser search and focus its input. */
-  requestSearch: () => void
-  /** Request the existing directory picker. */
+}
+
+/**
+ * Tab-strip injected share (arrives via the register inject factory). The
+ * strip owns switching, ordering, closing, and adding; the row data comes from
+ * the framework's global hooks.
+ */
+export type WorkspaceTabsInjected = DirectoryPickingInjected & CurrentWorkspaceInjected & {
+  hooks: DirectoryPickingInjected['hooks'] & CurrentWorkspaceInjected['hooks'] & {
+    /** Command-raised requests (the add command) the strip consumes. */
+    workspaceShortcuts: HostObservable<WorkspaceShortcutState>
+  }
+  /** Make a Workspace current: its most recent Session, or a blank one. */
+  selectWorkspace: (workspaceId: WorkspaceId) => void
+  /**
+   * Write the durable registry order, DOM-insertBefore-like.
+   * @param workspaceId - Workspace to move.
+   * @param beforeWorkspaceId - anchor Workspace; omitted appends.
+   */
+  reorderWorkspace: (workspaceId: WorkspaceId, beforeWorkspaceId?: WorkspaceId) => Promise<void>
+  /** Close a Workspace registration; its directory and Session logs remain. */
+  closeWorkspace: (workspaceId: WorkspaceId) => Promise<void>
+  /** Adopt a picked host directory as a real Workspace. */
+  createWorkspace: (input: { path: string }) => Promise<WorkspaceView>
+  /** Raise the directory-picking request the add control and the `workspace.add` command share. */
   requestAddWorkspace: () => void
   /** Consume the directory-picker opening request. */
   closeAddWorkspace: () => void
   /** Publish directory interaction occupancy for command availability. */
   setDirectoryBusy: (busy: boolean) => void
   /**
-   * Create a fresh Session, or preserve a reusable blank with explicit draft options.
-   * Without an explicit Workspace, inherit the current Session Workspace,
-   * then the recent Workspace, or clear into the New Session view.
+   * Whether this Host can hand a Workspace directory to its desktop file
+   * manager. A false answer (a headless or remote browser Host) hides the tab
+   * menu's open-in-file-manager row.
    */
-  startSession: (workspaceId?: WorkspaceId, options?: StartSessionOptions) => void
+  canOpenWorkspaceFolder: () => Promise<boolean>
+  /**
+   * Open a Workspace directory in the Host's file manager (Explorer, Finder, or
+   * the Linux default) and resolve once the Host accepts the gesture.
+   * @param path - the Workspace's canonical host directory.
+   * @returns completion; rejects when the Host refuses or the opener fails.
+   */
+  openWorkspaceFolder: (path: string) => Promise<void>
+  /** Show one notice through the package's shared Workspace notice channel. */
+  notify: (toast: RowToast) => void
+}
+
+/** Props of the `shell.header` tab-strip entry: owner share + child flow hole + injected actions + the locale seat. */
+export type WorkspaceTabsProps =
+  PropsRuntime<'shell.header'>
+  & PropsRenderSlots<'shell.header.directoryFlow'>
+  & Omit<WorkspaceTabsInjected, 'hooks'>
+  & PropsHooks<WorkspaceTabsInjected['hooks']>
+  & PropsLocale<'workspace'>
+
+/**
+ * Browser-private injected share (arrives via the register inject factory).
+ * Data reads use the global framework hooks; these are the Host actions the
+ * browsing region drives.
+ */
+export type WorkspaceBrowserInjected = CurrentWorkspaceInjected & {
+  hooks: CurrentWorkspaceInjected['hooks'] & {
+    /** Command-raised requests (search) the browser consumes. */
+    workspaceShortcuts: HostObservable<WorkspaceShortcutState>
+    shortcuts: HostObservable<readonly ShortcutCatalogEntry[]>
+  }
+  /** Open the browser search and focus its input. */
+  requestSearch: () => void
   /** Open a real Session. */
   open: (sessionId: SessionId) => void
   /**
@@ -261,17 +310,8 @@ export type WorkspaceBrowserInjected = {
   notifyArchivedNotOpenable: () => void
   /** Rename a Host Workspace (rejects on name conflict; resolves on durability). */
   renameWorkspace: (workspaceId: WorkspaceId, title: string) => Promise<void>
-  /** Delete only a Host Workspace registration; directory and Session logs remain. */
-  deleteWorkspace: (workspaceId: WorkspaceId) => Promise<void>
-  /**
-   * Reorder a Workspace in the durable registry display order.
-   * Omitted anchor appends to the end.
-   */
-  insertWorkspaceBefore: (workspaceId: WorkspaceId, beforeWorkspaceId?: WorkspaceId) => Promise<void>
   /** Remove a Session from the registry-global archived set (the search results' restore button). */
   unarchiveSession: (sessionId: SessionId) => Promise<void>
-  /** Adopt a picked host directory as a real Workspace before targeting a Session. */
-  createWorkspace: (input: { path: string }) => Promise<WorkspaceView>
 }
 
 /** The browser's declared viewing store handle, shared with the row actions that write view state. */
@@ -301,6 +341,8 @@ export type RowToast =
   | { kind: 'defaultWorkspaceFailed' }
   | { kind: 'forkRequiresOpen'; sessionId: SessionId }
   | { kind: 'shortcutForkFailed'; reason: 'unavailable' | 'failed' }
+  /** A Workspace tab's file-manager gesture failed; `message` carries the Host's untranslated words. */
+  | { kind: 'openFolderFailed'; message: string }
   /**
    * An explicit New Session request that failed. `message` is untranslated:
    * a Host refusal as `code: message` — the stable code stays in the copy so
@@ -468,7 +510,6 @@ export type RowToastProps =
 export type WorkspaceBrowserProps =
   PropsRuntime<'sidebar.workspaces'>
   & PropsRenderSlots<
-    | 'sidebar.workspaces.directoryFlow'
     | 'sidebar.workspaces.session.menu.item'
     | 'sidebar.workspaces.session.row.action'
     | 'sidebar.session.row.leading'

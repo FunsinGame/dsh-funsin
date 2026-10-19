@@ -35,27 +35,49 @@
   padding: 18px 10px 6px;
 }
 
-/* The brand stays in the sidebar; fixed caption controls survive zero-width collapse. */
+/* The Windows caption owns the brand; the sidebar's logo row keeps only the
+   fixed toggle and reserves no height of its own. */
 :global([data-windows-titlebar]) .root .logoRow {
-  height: 40px;
+  height: 0;
   margin: 0;
   padding: 0;
+}
+
+/* The brand heads the caption menubar at the window's left edge. It is fixed
+   so the zero-width sidebar cannot clip it, and the toggle and the desktop
+   menubar follow the width SidebarRoot.tsx measures. The caption's own band
+   already drags; the wordmark keeps that run draggable over its box and stays
+   out of the collapse fade (it belongs to the window chrome, not the column). */
+.captionBrand {
+  position: fixed;
+  top: 0;
+  left: 12px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 160px;
+  height: var(--dsh-windows-titlebar-height, 40px);
+  overflow: hidden;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.fading > .captionBrand {
+  opacity: 1;
+  transition: none;
 }
 
 :global([data-windows-titlebar]) .toggle {
   position: fixed;
   top: calc((var(--dsh-windows-titlebar-height) - 28px) / 2);
-  left: 12px;
+  left: var(--dsh-windows-caption-controls-start, 180px);
   z-index: 30;
   -webkit-app-region: no-drag;
 }
 
 :global([data-windows-titlebar]) .root.collapsed .logoRow {
   height: 0;
-}
-
-:global([data-windows-titlebar]) .root:not(.collapsed) .brand {
-  padding-left: 4px;
 }
 
 :global([data-windows-titlebar]) .brandIdentity {
@@ -85,14 +107,10 @@
   display: none;
 }
 
-:global(html[data-windows-titlebar]:has([data-sidebar-collapsed='true'])) {
-  --dsh-windows-menu-start: 84px;
-}
-
 :global([data-windows-titlebar]) .collapsed .newSession {
   position: fixed;
   top: calc((var(--dsh-windows-titlebar-height) - 28px) / 2);
-  left: 48px;
+  left: calc(var(--dsh-windows-caption-controls-start, 180px) + 36px);
   margin: 0;
   padding: 0;
   border: none;

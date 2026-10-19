@@ -1,35 +1,17 @@
 /**
- * Derives the workspace browser tree from caller-projected Workspace and
- * Session order. Unassigned Sessions trail under Ungrouped; only the selected
- * blank Session remains visible.
+ * Derives the Session list and search projections for the current Workspace
+ * from caller-projected Workspace membership and Session order.
  */
 import {
   type SessionListState, type SessionSearchResultItem, type SessionSummary,
 } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {
   SessionStatusSnapshot,
 } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { workspaceTitleOf } from '@deepseek-ai/dsh-util-workspace-path'
-
-/** Group key for Sessions outside every Workspace. */
-export const UNGROUPED_KEY = ''
-
-/**
- * Resolve the Workspace browser group that owns one Session.
- * @param workspaces - authoritative Workspace membership.
- * @param sessionId - Session whose browser group is required.
- * @returns owning Workspace id, or {@link UNGROUPED_KEY} when no Workspace accounts for it.
- */
-export function owningGroupKey(
-  workspaces: readonly WorkspaceView[],
-  sessionId: SessionId,
-): string {
-  return (workspaces.find(workspace => workspace.sessionIds.includes(sessionId))
-    ?.workspaceId as string | undefined) ?? UNGROUPED_KEY
-}
 
 /** Pending interaction kinds with dedicated Workspace-row presentation. */
 export type SessionPendingInteractionStatus = 'approval' | 'plan-review' | 'question'
@@ -40,7 +22,7 @@ function mainSessionId(list: SessionListState): SessionId | undefined {
     .find(session => (session.retainedBy.mainView ?? 0) > 0)?.id
 }
 
-/** One top-level session row in a group or the flat list. */
+/** One session row in the current Workspace's list or in search results. */
 export interface SessionNode {
   id: SessionId
   /** Stored title, or empty; the renderer localizes blank and unnamed row labels. */
@@ -63,25 +45,6 @@ export interface SessionNode {
 
 /** Session order selected by the Workspace browser. */
 export type SessionOrderBy = 'manual' | 'updated'
-
-/** One workspace group section: header row facts + visible top-level session rows. */
-export interface GroupNode {
-  /** Group key: the workspace id or {@link UNGROUPED_KEY}. */
-  key: string
-  /** Backing Workspace id; absent only for the ungrouped bucket. */
-  workspaceId: WorkspaceId | undefined
-  cwd: string | undefined
-  /** Workspace creation time (epoch ms); absent only for the ungrouped bucket. */
-  createdAt: number | undefined
-  label: string
-  /** Total visible sessions in the group. */
-  sessionCount: number
-  expanded: boolean
-  /** The group contains the selected session (active folder tint; supplied here so the renderer never scans). */
-  containsCurrent: boolean
-  /** Visible session rows (empty while the group is folded). */
-  sessions: readonly SessionNode[]
-}
 
 /** One flat search row combining list metadata with an optional content match. */
 export interface SearchResultNode {
@@ -106,27 +69,11 @@ export interface SearchResultSet {
   hasMore: boolean
 }
 
-/** Viewing state consumed by the derivation. */
-export interface TreeView {
-  expandedGroups: readonly string[]
-  /** Browser-local order for Sessions without a backing Workspace account. */
-  ungroupedOrder?: readonly string[]
-}
-
-interface Group {
-  key: string
-  workspaceId: WorkspaceId | undefined
-  cwd: string | undefined
-  createdAt: number | undefined
-  label: string
-  sessions: SessionSummary[]
-}
-
 /**
- * Directory display label: basename of the path (both separators accepted).
- * Ungrouped-bucket fallback for surfaces without a workspace title.
- * @param cwd - directory path, or undefined for the ungrouped bucket.
- * @returns basename, the raw cwd when it has no basename, or an empty ungrouped marker.
+ * Directory display label: basename of the path (both separators accepted);
+ * the fallback for a Session no Workspace accounts for.
+ * @param cwd - directory path, or undefined when the Session recorded none.
+ * @returns basename, the raw cwd when it has no basename, or an empty marker.
  */
 export function workspaceLabel(cwd: string | undefined): string {
   if (cwd === undefined || cwd === '') return ''
@@ -296,85 +243,6 @@ function sessionTitle(session: SessionSummary): string {
   return session.blank ? '' : (session.title?.trim() ?? '')
 }
 
-/** Build one group without projecting session lineage into presentation. */
-function buildGroup(
-  key: string,
-  workspaceId: WorkspaceId | undefined,
-  cwd: string | undefined,
-  createdAt: number | undefined,
-  label: string,
-  members: readonly SessionSummary[],
-): Group {
-  return { key, workspaceId, cwd, createdAt, label, sessions: [...members] }
-}
-
-/** Apply a stored Ungrouped order and append newly loose Sessions by recency. */
-function orderedUngrouped(
-  members: readonly SessionSummary[],
-  stored: readonly string[] | undefined,
-  summaries: SessionListState['byId'],
-): SessionSummary[] {
-  const byId = new Map(members.map(session => [session.id as string, session]))
-  const ids = stored === undefined
-    ? orderByRecency(members.map(session => session.id), summaries)
-    : reconcileManualOrder(members.map(session => session.id), stored, summaries)
-  return ids.flatMap((id) => {
-    const session = byId.get(id)
-    /* v8 ignore next -- ids are projected exclusively from the members used to build byId. */
-    return session === undefined ? [] : [session]
-  })
-}
-
-/**
- * Group Sessions by Workspace: one group per caller-ordered entity, with
- * members resolved from caller-ordered sessionIds. Sessions outside every
- * Workspace trail in the browser-local Ungrouped order, which falls back to
- * recency before that order is initialized.
- */
-function groupByWorkspace(
-  list: SessionListState,
-  workspaces: readonly WorkspaceView[],
-  archived: ReadonlySet<SessionId>,
-  archivedFilter: ArchivedFilter,
-  ungroupedOrder: readonly string[] | undefined,
-): Group[] {
-  const current = mainSessionId(list)
-  const groups: Group[] = []
-  const accounted = new Set<SessionId>()
-  for (const workspace of workspaces) {
-    const members: SessionSummary[] = []
-    for (const id of workspace.sessionIds) {
-      const summary = list.byId[id]
-      if (summary === undefined) continue // account may lead the list pull; the row appears when the summary lands
-      accounted.add(id)
-      if (!sessionVisible(summary, current, archived, archivedFilter)) continue
-      members.push(summary)
-    }
-    // The archived-only view lists archives, not the Workspace inventory, so
-    // a Workspace without archived Sessions contributes no group.
-    if (archivedFilter === 'only' && members.length === 0) continue
-    groups.push(buildGroup(
-      workspace.workspaceId, workspace.workspaceId, workspace.path,
-      Date.parse(workspace.createdAt), workspace.title, members,
-    ))
-  }
-  const stray = list.ids
-    .map(id => list.byId[id])
-    .filter((s): s is SessionSummary =>
-      s !== undefined && !accounted.has(s.id) && sessionVisible(s, current, archived, archivedFilter))
-  if (stray.length > 0) {
-    groups.push(buildGroup(
-      UNGROUPED_KEY,
-      undefined,
-      undefined,
-      undefined,
-      '',
-      orderedUngrouped(stray, ungroupedOrder, list.byId),
-    ))
-  }
-  return groups
-}
-
 /** Keep navigation presentation independent from domain-owned interaction objects. */
 function visiblePendingKind(kind: string | undefined): SessionPendingInteractionStatus | undefined {
   switch (kind) {
@@ -415,86 +283,6 @@ function sessionNode(
     updatedAt: s.updatedAt,
     ...(pendingInteraction === undefined ? {} : { pendingInteraction }),
   }
-}
-
-/**
- * Derive the workspace browser groups with every session as a top-level row.
- *
- * Every group shows, except that the archived-only filter drops groups
- * without visible members; sessions populate under expanded groups with
- * pinned rows leading in the selected local order. Blank sessions are
- * excluded except for the selected provisional New Session row; archived
- * sessions keep their slots and appear per the archived filter. Content
- * search lives outside this derivation (see {@link deriveSearchResults}).
- * @param list - sessions list snapshot (`mainView` retention feeds containsCurrent).
- * @param workspaces - real Workspaces in Host group order with caller-projected Session order.
- * @param rowState - registry-global pin and archive sets plus the archived filter.
- * @param statuses - unified UI status by Session.
- * @param view - local expansion arrays.
- * @returns group sections in render order.
- */
-export function deriveGroups(
-  list: SessionListState,
-  workspaces: readonly WorkspaceView[],
-  rowState: SessionRowState,
-  statuses: SessionStatuses,
-  view: TreeView,
-): GroupNode[] {
-  const archived = new Set(rowState.archivedSessionIds)
-  const pinned = new Set(rowState.pinnedSessionIds)
-  const expandedGroups = new Set(view.expandedGroups)
-  const current = mainSessionId(list)
-  const currentGroup = current === undefined
-    ? undefined
-    : owningGroupKey(workspaces, current)
-  const groups: GroupNode[] = []
-  for (const g of groupByWorkspace(list, workspaces, archived, rowState.archivedFilter, view.ungroupedOrder)) {
-    const expanded = expandedGroups.has(g.key)
-    groups.push({
-      key: g.key,
-      workspaceId: g.workspaceId,
-      cwd: g.cwd,
-      createdAt: g.createdAt,
-      label: g.label,
-      sessionCount: g.sessions.length,
-      expanded,
-      containsCurrent: g.key === currentGroup,
-      sessions: expanded
-        ? sectionMembers(g.sessions, pinned, archived)
-          .map(session => sessionNode(session, list, statuses, pinned, archived))
-        : [],
-    })
-  }
-  return groups
-}
-
-/**
- * Select complete flat-list membership, independently of archive visibility.
- * @param list - sessions list snapshot.
- * @returns known ordinary Session ids, including archives and only the current blank.
- */
-export function sessionMemberIds(list: SessionListState): SessionId[] {
-  return visibleSessionIds(list, [], 'show')
-}
-
-/**
- * Select visible flat-list members without deriving row presentation or ordering.
- * @param list - sessions list snapshot.
- * @param archivedSessionIds - registry-global archive set.
- * @param archivedFilter - archived-row visibility choice.
- * @returns known visible Session ids in list order, including ordinary forks and only the current blank.
- */
-export function visibleSessionIds(
-  list: SessionListState,
-  archivedSessionIds: readonly SessionId[],
-  archivedFilter: ArchivedFilter,
-): SessionId[] {
-  const archived = new Set(archivedSessionIds)
-  const current = mainSessionId(list)
-  return list.ids.filter((id) => {
-    const s = list.byId[id]
-    return s !== undefined && sessionVisible(s, current, archived, archivedFilter)
-  })
 }
 
 /**
@@ -618,31 +406,4 @@ export function deriveSearchResults(
     }),
     hasMore: content.hasMore || ordered.length > limit,
   }
-}
-
-/** Normalize separators for comparison without interpreting POSIX backslashes as separators. */
-function folderPath(path: string): string {
-  const windows = /^[A-Za-z]:[/\\]/.test(path) || path.startsWith('\\\\')
-  return (windows ? path.replaceAll('\\', '/') : path).replace(/\/+$/, '')
-}
-
-/**
- * Find the nearest registered ancestor, excluding the Workspace directory itself.
- * Paths use Host spelling; matching is case-sensitive, like Workspace identity.
- * @param path - Workspace directory.
- * @param parents - registered Workspace directory paths.
- * @returns the owning parent path, or undefined when no parent contains the Workspace.
- */
-export function owningParentFolder(path: string, parents: readonly string[]): string | undefined {
-  const child = folderPath(path)
-  let owner: string | undefined
-  let length = -1
-  for (const parent of parents) {
-    const root = folderPath(parent)
-    if (root.length > length && child !== root && child.startsWith(`${root}/`)) {
-      owner = parent
-      length = root.length
-    }
-  }
-  return owner
 }

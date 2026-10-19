@@ -72,6 +72,12 @@ export function registerToasts(
       }),
     }, ToastEntry<PropsRuntime<'workspace.toast', 'createFailed'>>)
     yield ctx.slots.register({
+      name: 'workspace.toast', key: 'openFolderFailed', locale: 'workspace',
+      inject: (): ToastDisplayInjected<'openFolderFailed'> => ({
+        display: (notice, t) => ({ text: t('toast.openFolderFailed', { message: notice.message }), tone: 'warning' }),
+      }),
+    }, ToastEntry<PropsRuntime<'workspace.toast', 'openFolderFailed'>>)
+    yield ctx.slots.register({
       name: 'workspace.toast', key: 'forkRequiresOpen', locale: 'workspace',
       inject: (): ToastDisplayInjected<'forkRequiresOpen'> => ({
         display: (notice, t, dismiss) => ({

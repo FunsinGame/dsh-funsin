@@ -16,7 +16,7 @@
  * scrollbar indirection away while it is elsewhere, so a list the user is not
  * pointing at carries no bar.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   FishLogo, IconNewChatOutlineMedium, IconNewChatOutlineRegular, IconPanelLeftOutlineRegular, isDarwinDesktop, ShortcutKeys, Tooltip,
@@ -172,6 +172,64 @@ export function SidebarRoot({
   const buildVersion = localBuildVersion()
 
   const darwinDesktop = isDarwinDesktop()
+  // One wordmark, two homes: the logo row on Web and macOS, the Windows
+  // caption on the desktop shell, where the brand heads the menubar at the
+  // window's left edge. Both homes render the same slot occupants.
+  const brandIdentity = (
+    <span className={css.brandIdentity} aria-hidden="true">
+      <span className={css.brandMark}>
+        {renderSlot('sidebar.brand.mark', { size: 24 }, { fallback: <FishLogo size={24} /> })}
+      </span>
+      <span className={css.brandName}>
+        {renderSlot('sidebar.brand.name', {}, {
+          fallback: buildVersion === undefined
+            ? <span className={css.fallbackBrandName}>{t('brand.localBuild')}</span>
+            : (
+              <span className={css.localBuildBrand}>
+                <span className={css.localBuildTitle}>{t('brand.localBuild')}</span>
+                <span className={css.buildVersion}>{buildVersion}</span>
+              </span>
+            ),
+        })}
+      </span>
+    </span>
+  )
+  // The Windows caption places the brand first, then the fixed toggle, then
+  // the desktop menubar, which reads its left inset from
+  // --dsh-windows-menu-start. The wordmark's width depends on locale, brand
+  // occupant, and build badge, so it is measured rather than reserved: a
+  // layout effect publishes both insets before the caption paints, and the
+  // observer follows a language or badge change.
+  const captionBrand = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    if (!windowsTitlebar) return
+    const root = document.documentElement
+    const element = captionBrand.current
+    /* v8 ignore next -- the caption brand renders whenever the Windows caption marker is present. */
+    if (element === null) return
+    let frame: number | null = null
+    const apply = (): void => {
+      frame = null
+      const controls = Math.round(element.getBoundingClientRect().right) + 8
+      root.style.setProperty('--dsh-windows-caption-controls-start', `${controls}px`)
+      // The caption stays clean while the column is open; only the collapsed
+      // state adds the expand control (28px + 8px) and New Session (28px + 8px)
+      // between the brand and the Desktop menus.
+      root.style.setProperty('--dsh-windows-menu-start', `${controls + (collapsed ? 72 : 0)}px`)
+    }
+    const schedule = (): void => {
+      frame ??= requestAnimationFrame(apply)
+    }
+    apply()
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : undefined
+    observer?.observe(element)
+    return () => {
+      observer?.disconnect()
+      if (frame !== null) cancelAnimationFrame(frame)
+      root.style.removeProperty('--dsh-windows-caption-controls-start')
+      root.style.removeProperty('--dsh-windows-menu-start')
+    }
+  }, [windowsTitlebar, collapsed])
   // Rail resting state is the whale mark; hovering swaps in the panel icon
   // (the expand affordance, figma sidebar-hover flow). Expanded it is a plain
   // panel icon.
@@ -213,46 +271,34 @@ export function SidebarRoot({
       {/* macOS hiddenInset titlebar: the strip shares the row with the
           traffic lights and keeps the toggle at the sidebar's top-right. */}
       {darwinDesktop && <div className={css.topStrip} data-window-drag>{toggle}</div>}
+      {/* Windows caption: the brand heads the menubar at the window's left
+          edge; the sidebar's logo row keeps only the fixed toggle. */}
+      {windowsTitlebar && (
+        <div ref={captionBrand} className={css.captionBrand} data-windows-caption-brand>
+          {brandIdentity}
+        </div>
+      )}
       <div className={css.logoRow} data-window-drag>
         {/* Expanded, the brand doubles as a New Session shortcut — except on
             macOS, where it stays part of the logo row's window-drag surface
-            (a button would subtract itself through the global no-drag rule);
-            the collapsed rail's logo is the expand toggle below instead. */}
-        {wide && (() => {
-          const identity = (
-            <span className={css.brandIdentity} aria-hidden="true">
-              <span className={css.brandMark}>
-                {renderSlot('sidebar.brand.mark', { size: 24 }, { fallback: <FishLogo size={24} /> })}
-              </span>
-              <span className={css.brandName}>
-                {renderSlot('sidebar.brand.name', {}, {
-                  fallback: buildVersion === undefined
-                    ? <span className={css.fallbackBrandName}>{t('brand.localBuild')}</span>
-                    : (
-                      <span className={css.localBuildBrand}>
-                        <span className={css.localBuildTitle}>{t('brand.localBuild')}</span>
-                        <span className={css.buildVersion}>{buildVersion}</span>
-                      </span>
-                    ),
-                })}
-              </span>
-            </span>
-          )
-          return darwinDesktop
-            ? <span className={clsx(css.brand, css.wide)}>{identity}</span>
-            : (
-              <button
-                type="button"
-                className={clsx(css.brand, css.wide)}
-                aria-label={t('session.new.label')}
-                aria-keyshortcuts={newShortcut?.aria}
-                onClick={() => { startSession() }}
-              >
-                {identity}
-              </button>
-            )
-        })()}
-        {!darwinDesktop && toggle}
+            (a button would subtract itself through the global no-drag rule),
+            and in the Windows caption, where the wordmark is a drag surface
+            and the New Session capsule owns the action. The collapsed rail's
+            logo is the expand toggle below instead. */}
+        {wide && !windowsTitlebar && (darwinDesktop
+          ? <span className={clsx(css.brand, css.wide)}>{brandIdentity}</span>
+          : (
+            <button
+              type="button"
+              className={clsx(css.brand, css.wide)}
+              aria-label={t('session.new.label')}
+              aria-keyshortcuts={newShortcut?.aria}
+              onClick={() => { startSession() }}
+            >
+              {brandIdentity}
+            </button>
+          ))}
+        {!darwinDesktop && (!windowsTitlebar || collapsed) && toggle}
       </div>
 
       {/* The label fades before the hover/focus shortcut, including on translucent backgrounds. */}

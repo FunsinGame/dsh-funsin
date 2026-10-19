@@ -1,32 +1,28 @@
 /**
- * The workspace browser's viewing store: the session-list grouping mode,
- * persisted across reloads. Module level exports the factory only (a
- * module-level handle would pin the store identity across plugin reloads);
+ * The Workspace browser's viewing store: Session order and archived-row
+ * visibility, persisted across reloads. Module level exports the factory only
+ * (a module-level handle would pin the store identity across plugin reloads);
  * register() receives the factory and the browser derives its PropsStore
  * share from the return type.
+ *
+ * The list covers the current Workspace alone, so the store keeps one manual
+ * order account per Workspace — switching Workspaces keeps each one's saved
+ * positions.
  */
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { reconcileManualOrder, type ArchivedFilter, type SessionRowState } from './tree.ts'
 
-/** Browser-local order account for the hierarchy-free flat Session list. */
-export const FLAT_SESSION_ORDER_KEY = '__flat_session_order__'
-
-/** Session-list grouping mode: sibling Workspace sections, a Workspace tree, or one flat list. */
-export type SessionGroupBy = 'workspace' | 'workspace-tree' | 'flat'
 /** Session order: saved manual positions or current recency. */
 export type SessionOrderBy = 'manual' | 'updated'
 
 /** Workspace browser viewing state persisted across surface remounts and reloads. */
 type WorkspaceViewState = {
-  groupBy: SessionGroupBy
   orderBy: SessionOrderBy
-  /** Explicit group expansion keyed by Workspace identity, including descendants in tree mode. */
-  groupExpansion: Record<string, boolean>
-  /** Saved manual order per Workspace group plus the browser-local flat-list account. */
+  /** Saved manual order per Workspace account. */
   sessionOrderByAccount: Record<string, string[]>
-  /** Archived-row visibility; omitted in pre-filter v5 snapshots and read as 'default'. */
+  /** Archived-row visibility; omitted in pre-filter snapshots and read as 'default'. */
   archivedFilter?: ArchivedFilter
 }
 
@@ -41,13 +37,11 @@ type SessionOrderSource = {
  * return type); drift fails assignability at the defineStore call.
  */
 type WorkspaceViewActions = {
-  setGroupBy: (draft: WorkspaceViewState, mode: SessionGroupBy) => void
   setOrderBy: (
     draft: WorkspaceViewState,
     mode: SessionOrderBy,
     initialOrders: Readonly<Record<string, readonly string[]>>,
   ) => void
-  setGroupExpanded: (draft: WorkspaceViewState, key: string, expanded: boolean) => void
   retainAccountKeys: (draft: WorkspaceViewState, workspaceKeys: readonly string[]) => void
   syncSessionOrders: (
     draft: WorkspaceViewState,
@@ -82,30 +76,23 @@ function copySessionOrders(
 export function createWorkspaceViewStore(): EngineStoreHandle<WorkspaceViewState, WorkspaceViewActions> {
   return defineStore({
     init: (): WorkspaceViewState => ({
-      groupBy: 'workspace',
       orderBy: 'updated',
-      groupExpansion: {},
       sessionOrderByAccount: {},
       archivedFilter: 'default',
     }),
-    persist: 'dsh.workspace.view.v5',
+    // v6 drops the retired grouping state (group mode and per-group expansion).
+    persist: 'dsh.workspace.view.v6',
     actions: {
-      setGroupBy: (d, mode: SessionGroupBy) => { d.groupBy = mode },
       setOrderBy: (d, mode: SessionOrderBy, initialOrders) => {
         if (mode === d.orderBy) return
         d.sessionOrderByAccount = mode === 'manual' ? copySessionOrders(initialOrders) : {}
         d.orderBy = mode
       },
-      setGroupExpanded: (d, key: string, expanded: boolean) => { d.groupExpansion[key] = expanded },
       retainAccountKeys: (d, workspaceKeys: readonly string[]) => {
         const retained = new Set(workspaceKeys)
-        d.groupExpansion = Object.fromEntries(
-          Object.entries(d.groupExpansion).filter(([key]) => retained.has(key)),
-        )
         d.sessionOrderByAccount = Object.fromEntries(
           Object.entries(d.sessionOrderByAccount).filter(([key]) => retained.has(key)),
         )
-        delete (d as WorkspaceViewState & { sessionUpdatedAtByAccount?: unknown }).sessionUpdatedAtByAccount
       },
       syncSessionOrders: (d, orders) => {
         if (d.orderBy !== 'manual') return

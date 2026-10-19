@@ -13,7 +13,7 @@ import type { ShortcutCommand } from '@deepseek-ai/dsh-client-shortcuts/client'
 import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-workspace/client'
-import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from '@deepseek-ai/dsh-client-ui-workspace/client'
+import type { WorkspaceBrowserInjected, WorkspacePickerInjected, WorkspaceTabsInjected } from '@deepseek-ai/dsh-client-ui-workspace/client'
 import {
   type ArchiveSessionInjected, type ForkSessionInjected, menuOpenStateFactory, type PinSessionInjected,
   type RenameSessionInjected, type RowToastInjected, type SessionArchiveConfirmInjected, type SessionRenameDialogInjected,
@@ -28,8 +28,6 @@ import { RowActionToast } from '../src/client/session-actions/RowActionToast.tsx
 import type { ArchiveToastInjected, ToastDisplayInjected } from '../src/client/contract/toast.ts'
 import { SessionIdMenuItem } from '../src/client/session-actions/SessionId.tsx'
 import { WorkspacePicker } from '../src/client/WorkspacePicker.tsx'
-import { FLAT_SESSION_ORDER_KEY } from '../src/client/stores.ts'
-import { UNGROUPED_KEY } from '../src/client/tree.ts'
 import { apply as hostApply } from '../src/index.ts'
 
 const sid = (id: string) => id as SessionId
@@ -124,13 +122,15 @@ async function bench() {
   const subscribe = () => () => {}
   const workspacesSubscribe = vi.fn(subscribe)
   const initializeDefault = vi.fn(async (): Promise<WorkspaceView | undefined> => undefined)
+  const remove = vi.fn(async () => undefined)
+  const insertBefore = vi.fn(async () => undefined)
   ctx.provide('workspaces', {
     list: { getSnapshot: () => workspaceSnapshot, subscribe: workspacesSubscribe },
     create,
     initializeDefault,
     rename,
-    delete: vi.fn(async () => undefined),
-    insertBefore: vi.fn(async () => undefined),
+    delete: remove,
+    insertBefore,
     archiveSession: vi.fn(async () => undefined),
     unarchiveSession: vi.fn(async () => undefined),
     pinSession,
@@ -153,8 +153,14 @@ async function bench() {
   } as never)
   const pickDirectory = vi.fn(() => Promise.resolve({ ok: true as const, value: '/projects/picked' }))
   const directoryPicker = { pick: pickDirectory }
-  Object.assign(new TestRemote(ctx), { directoryPicker })
+  // The Session Remote's verified-host-path opener, which the tab menu drives.
+  // Broad result types let a test script either branch without casts.
+  const canOpenWorkspacePath = vi.fn(async (): Promise<{ ok: boolean; value?: boolean }> => ({ ok: true, value: true }))
+  const openWorkspacePath = vi.fn(async (): Promise<{ ok: boolean; error?: { code: string; message: string } }> => ({ ok: true }))
+  const sessionRemote = { canOpenWorkspacePath, openWorkspacePath }
+  Object.assign(new TestRemote(ctx), { directoryPicker, session: sessionRemote })
   ctx.provide('remote.directoryPicker', directoryPicker as never)
+  ctx.provide('remote.session', sessionRemote as never)
   const locale = new LocaleRuntime(ctx)
   // These specs assert the shipped Chinese copy. There is no jsdom `window`
   // in this lane, so browser-language detection never runs and the locale
@@ -164,13 +170,14 @@ async function bench() {
   return {
     ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, rename, commands, accessSource,
     retain, using, selectPanel, search, renameSession, binding, fork, pickDirectory, pinSession, unpinSession,
-    workspacesSubscribe, initializeDefault, history, scope, sessionOf,
+    workspacesSubscribe, initializeDefault, history, scope, sessionOf, remove, insertBefore,
+    canOpenWorkspacePath, openWorkspacePath,
     setWorkspaces: (snapshot: WorkspaceSnapshot): void => { workspaceSnapshot = snapshot },
     setSessions: (snapshot: SessionListState): void => { sessionSnapshot = snapshot },
   }
 }
 
-type HoleName = 'sidebar.workspaces' | 'conversation.hero.workspace' | 'conversation.empty.workspace' | 'shell.overlay'
+type HoleName = 'sidebar.workspaces' | 'conversation.hero.workspace' | 'conversation.empty.workspace' | 'shell.overlay' | 'shell.header'
 
 const MENU_ITEM = 'sidebar.workspaces.session.menu.item'
 const ROW_ACTION = 'sidebar.workspaces.session.row.action'
@@ -219,7 +226,8 @@ describe('ui-workspace apply', () => {
 
   it('declares the services it drives', () => {
     expect(inject).toEqual([
-      'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'layout', 'shortcuts', 'remoteAccess',
+      'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'remote.session', 'layout',
+      'shortcuts', 'remoteAccess',
     ])
   })
 
@@ -307,7 +315,8 @@ describe('ui-workspace apply', () => {
     expect(rowToastEntry.store).toBeUndefined()
     expect(b.slots.entries('workspace.toast').map(row => row.options.key)).toEqual([
       'sessionIdCopied', 'sessionIdCopyFailed', 'pinFailed', 'unpinFailed', 'archivedNotOpenable',
-      'defaultWorkspaceFailed', 'shortcutForkFailed', 'createFailed', 'forkRequiresOpen', 'archived', 'stoppedAndArchived',
+      'defaultWorkspaceFailed', 'shortcutForkFailed', 'createFailed', 'openFolderFailed', 'forkRequiresOpen',
+      'archived', 'stoppedAndArchived',
     ])
     for (const registration of b.slots.entries('workspace.toast')) {
       expect(registration.locale).toBe('workspace')
@@ -439,8 +448,6 @@ describe('ui-workspace apply', () => {
     await vi.waitFor(() => {
       expect(view.getSnapshot().sessionOrderByAccount).toEqual({
         alpha: ['three', 'one', 'two'],
-        [UNGROUPED_KEY]: [],
-        [FLAT_SESSION_ORDER_KEY]: ['three', 'one', 'two'],
       })
     })
     // The saved positions lead without leaving Last updated, and a successful pin raises no notice.
@@ -799,20 +806,12 @@ describe('ui-workspace apply', () => {
     expect(b.selectPanel).not.toHaveBeenCalled()
   })
 
-  it('routes browser actions and picker creation to the services', async () => {
+  it('routes browser, tab strip, and picker actions to the services', async () => {
     const b = await bench()
-    declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace')
+    declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace', 'shell.header', 'shell.overlay')
     await b.ctx.plugin({ inject: [...inject], apply }).await()
-    const startSession = vi.spyOn(b.ctx.uiWorkspace, 'startSession').mockImplementation(() => undefined)
 
     const browser = faceOf(b.slots.entries('sidebar.workspaces')[0]!) as WorkspaceBrowserInjected
-    // The browser share delegates to the shared Session navigation action.
-    browser.startSession('ws' as never)
-    expect(startSession).toHaveBeenLastCalledWith('ws', undefined)
-    browser.startSession()
-    expect(startSession).toHaveBeenLastCalledWith(undefined, undefined)
-    browser.startSession(undefined, { clearPreviousDraft: false })
-    expect(startSession).toHaveBeenLastCalledWith(undefined, { clearPreviousDraft: false })
     browser.open('session' as never)
     expect(b.retain).toHaveBeenCalledWith('session', { source: 'mainView' })
     const signal = new AbortController().signal
@@ -824,37 +823,64 @@ describe('ui-workspace apply', () => {
     expect(browser.searchResultLimit).toBe(20)
     await browser.renameWorkspace('ws' as never, 'renamed')
     expect(b.rename).toHaveBeenCalledWith('ws', 'renamed')
-    await browser.createWorkspace({ path: '/tmp/browser-project' })
-    expect(b.create).toHaveBeenCalledWith({ path: '/tmp/browser-project' })
+
+    const tabs = faceOf(b.slots.entries('shell.header')[0]!) as WorkspaceTabsInjected
+    await tabs.reorderWorkspace('ws' as never, 'anchor' as never)
+    expect(b.insertBefore).toHaveBeenCalledWith('ws', 'anchor')
+    await tabs.closeWorkspace('ws' as never)
+    expect(b.remove).toHaveBeenCalledWith('ws')
+    await tabs.createWorkspace({ path: '/tmp/project' })
+    expect(b.create).toHaveBeenCalledWith({ path: '/tmp/project' })
+    // The file-manager rows go through the Session Remote's verified path opener.
+    await expect(tabs.canOpenWorkspaceFolder()).resolves.toBe(true)
+    expect(b.canOpenWorkspacePath).toHaveBeenCalledOnce()
+    await tabs.openWorkspaceFolder('/projects/ws')
+    expect(b.openWorkspacePath).toHaveBeenCalledWith({ path: '/projects/ws' })
+    // A refused gesture rejects with the Host's stable code so the notice can name it.
+    b.openWorkspacePath.mockResolvedValueOnce({
+      ok: false,
+      error: new RemoteError('gateway/bad-request', 'Path has no verified Host path', {}),
+    })
+    await expect(tabs.openWorkspaceFolder('/missing')).rejects.toThrow('gateway/bad-request: Path has no verified Host path')
+    // A Host without a desktop, or an unreachable one, answers unavailable.
+    b.canOpenWorkspacePath.mockResolvedValueOnce({ ok: true, value: false })
+    await expect(tabs.canOpenWorkspaceFolder()).resolves.toBe(false)
+    b.canOpenWorkspacePath.mockRejectedValueOnce(new Error('carrier down'))
+    await expect(tabs.canOpenWorkspaceFolder()).resolves.toBe(false)
+    tabs.notify({ kind: 'openFolderFailed', message: 'gateway/bad-request: Path has no verified Host path' })
+    const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
+    expect(toast.hooks.toast.getSnapshot()).toMatchObject({
+      kind: 'openFolderFailed',
+      message: 'gateway/bad-request: Path has no verified Host path',
+    })
 
     const picker = faceOf(b.slots.entries('conversation.hero.workspace')[0]!) as WorkspacePickerInjected
-    await picker.createWorkspace({ path: '/tmp/project' })
-    expect(b.create).toHaveBeenCalledWith({ path: '/tmp/project' })
+    await picker.createWorkspace({ path: '/tmp/picker-project' })
+    expect(b.create).toHaveBeenCalledWith({ path: '/tmp/picker-project' })
   })
 
-  it('declares the browser child slots and reports directory-flow occupancy per surface', async () => {
+  it('declares the tab strip flow hole and reports its occupancy', async () => {
     const b = await bench()
-    declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace')
+    declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace', 'shell.header')
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     // Registration declared the child holes (declaration = render authorization).
-    expect(b.slots.spec('sidebar.workspaces.directoryFlow')).toMatchObject({ kind: 'single' })
+    expect(b.slots.spec('shell.header.directoryFlow')).toMatchObject({ kind: 'single' })
     expect(b.slots.spec('conversation.hero.workspace.directoryFlow')).toMatchObject({ kind: 'single' })
 
-    const browser = faceOf(b.slots.entries('sidebar.workspaces')[0]!) as WorkspaceBrowserInjected
+    const tabs = faceOf(b.slots.entries('shell.header')[0]!) as WorkspaceTabsInjected
     const picker = faceOf(b.slots.entries('conversation.hero.workspace')[0]!) as WorkspacePickerInjected
-    expect(browser.hooks.directoryFlow.getSnapshot()).toBe(false)
-    expect(browser.hooks.hostInfo.getSnapshot()).toMatchObject({ home: undefined })
+    expect(tabs.hooks.directoryFlow.getSnapshot()).toBe(false)
     expect(picker.hooks.directoryFlow.getSnapshot()).toBe(false)
     // A flow occupant flips exactly its own surface, and the source notifies.
     const notified = vi.fn()
-    const unsubscribe = browser.hooks.directoryFlow.subscribe(notified)
-    const dispose = b.slots.register({ name: 'sidebar.workspaces.directoryFlow' } as never, () => null)
-    expect(browser.hooks.directoryFlow.getSnapshot()).toBe(true)
+    const unsubscribe = tabs.hooks.directoryFlow.subscribe(notified)
+    const dispose = b.slots.register({ name: 'shell.header.directoryFlow' } as never, () => null)
+    expect(tabs.hooks.directoryFlow.getSnapshot()).toBe(true)
     expect(picker.hooks.directoryFlow.getSnapshot()).toBe(false)
     await Promise.resolve()
     expect(notified).toHaveBeenCalled()
     dispose()
-    expect(browser.hooks.directoryFlow.getSnapshot()).toBe(false)
+    expect(tabs.hooks.directoryFlow.getSnapshot()).toBe(false)
     unsubscribe()
   })
 

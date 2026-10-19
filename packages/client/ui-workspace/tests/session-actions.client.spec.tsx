@@ -774,6 +774,21 @@ describe('RowActionToast', () => {
     }
   })
 
+  it('reports a refused file-manager gesture with the Host words', async () => {
+    const { dismissToast, notify } = await toastSurface()
+    vi.useFakeTimers()
+    try {
+      notify({ kind: 'openFolderFailed', message: 'gateway/internal: path open failed' })
+      const alert = screen.getByRole('alert')
+      expect(alert.textContent).toBe('无法打开资源管理器：gateway/internal: path open failed')
+      expect(alert.querySelector('button')).toBeNull()
+      act(() => { vi.advanceTimersByTime(4000) })
+      expect(dismissToast).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('the archived notice holds longer than a plain notice, and a repeat restarts its hold', async () => {
     const { dismissToast, notify } = await toastSurface()
     vi.useFakeTimers()
