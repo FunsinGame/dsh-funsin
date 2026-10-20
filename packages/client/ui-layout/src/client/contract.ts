@@ -9,18 +9,23 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type { createLayoutStore } from './stores.ts'
 
+/** Which side of the anchor entry a dragged rail item lands on. */
+export type ActivityDropHalf = 'before' | 'after'
+
 /**
  * One activity-bar entry, projected from the `shell.activitybar.items` ledger
  * so the shell can own the button (chrome, tooltip, accessible name, active
- * indicator) while the entry owns only its glyph.
+ * indicator) while the entry owns only its glyph. The built-in Workspace entry
+ * belongs to the same list so it can take a user-chosen position, but it draws
+ * the frame's glyph instead of a registered one.
  */
 export interface ActivityEntry {
   /** List id the entry registered under; also the `shell.activity` key of its content. */
   id: string
-  /** Ascending rail order; ties retain registration order. */
-  order: number
   /** Accessible name and tooltip: the resolved label, or the id when it omits one. */
   label: string
+  /** True only for the built-in `workspace` entry. */
+  builtIn: boolean
 }
 
 /** Glyph share supplied by one activity-bar row. */
@@ -45,6 +50,13 @@ export type ActivityBarInjected = {
    * @throws when no rail entry and content view are registered for the id.
    */
   select: (id: string) => void
+  /**
+   * Move a rail entry next to an anchor entry and persist the resulting order.
+   * @param id - id being dragged.
+   * @param anchorId - entry the pointer targets.
+   * @param half - whether the dragged entry lands before or after the anchor.
+   */
+  reorder: (id: string, anchorId: string, half: ActivityDropHalf) => void
   /** Private reactive source bound to the framework selector hook. */
   hooks: { activities: HostObservable<readonly ActivityEntry[]> }
 }

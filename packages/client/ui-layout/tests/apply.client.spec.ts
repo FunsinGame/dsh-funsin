@@ -13,6 +13,7 @@ import { apply, inject, LayoutController } from '@deepseek-ai/dsh-client-ui-layo
 import { apply as nodeApply } from '@deepseek-ai/dsh-client-ui-layout'
 import type { MainPanelId } from '../src/client/service.ts'
 import type { ActivityBarInjected } from '../src/client/contract.ts'
+import { ACTIVITY_ORDER_STORAGE_KEY } from '../src/client/activity-order.ts'
 import type { createLayoutStore } from '../src/client/stores.ts'
 
 const owners = new Set<Fiber>()
@@ -22,6 +23,7 @@ let originalDarkTheme: string | null
 let originalThemeMetadata: Element[]
 
 beforeEach(() => {
+  localStorage.clear()
   originalRootStyle = document.documentElement.getAttribute('style')
   originalBodyStyle = document.body.getAttribute('style')
   originalDarkTheme = document.body.getAttribute('data-ds-dark-theme')
@@ -115,12 +117,15 @@ describe('ui-layout client apply', () => {
     const face = bar.inject!() as ActivityBarInjected
     const instance = (bar.store as ReturnType<typeof createLayoutStore>).create()
     const activities = face.hooks.activities
-    expect(activities.getSnapshot()).toEqual([])
+    expect(activities.getSnapshot()).toEqual([{ id: 'workspace', label: 'Workspace', builtIn: true }])
     const disposeItem = slots.register({
       name: 'shell.activitybar.items', id: 'plugins', order: 200, label: () => 'Plugins',
     }, () => null)
     await vi.waitFor(() => {
-      expect(activities.getSnapshot()).toEqual([{ id: 'plugins', order: 200, label: 'Plugins' }])
+      expect(activities.getSnapshot()).toEqual([
+        { id: 'workspace', label: 'Workspace', builtIn: true },
+        { id: 'plugins', label: 'Plugins', builtIn: false },
+      ])
     })
     // A rail entry without a `shell.activity` view fails at selection and
     // leaves the frame on its own composition.
@@ -129,16 +134,71 @@ describe('ui-layout client apply', () => {
     const disposeView = slots.register({ name: 'shell.activity', key: 'plugins' }, () => null)
     face.select('plugins')
     expect(instance.getSnapshot().activityInfo.activeId).toBe('plugins')
-    // A sync that projects the same ledger keeps the published snapshot.
-    const projected = activities.getSnapshot()
+    // The built-in entry's label follows the active language like any other rail label.
     ;(ctx.get('locale') as LocaleRuntime).setLocale('zh')
-    await vi.waitFor(() => { expect(activities.getSnapshot()).toBe(projected) })
+    await vi.waitFor(() => {
+      expect(activities.getSnapshot()).toEqual([
+        { id: 'workspace', label: '工作区', builtIn: true },
+        { id: 'plugins', label: 'Plugins', builtIn: false },
+      ])
+    })
     disposeItem()
-    await vi.waitFor(() => { expect(activities.getSnapshot()).toEqual([]) })
+    await vi.waitFor(() => {
+      expect(activities.getSnapshot()).toEqual([{ id: 'workspace', label: '工作区', builtIn: true }])
+    })
     // The selected entry is gone: the frame returns to its own composition.
     expect(instance.getSnapshot().activityInfo.activeId).toBe('workspace')
     disposeView()
     await fiber.dispose()
+  })
+
+  it('persists a dragged rail order and reapplies it on the next launch', async () => {
+    const { ctx, slots } = await bench()
+    const first = ctx.plugin({ inject: [...inject], apply })
+    await first.await()
+    const firstBar = slots.entries('shell.activitybar')[0]!
+    const firstFace = firstBar.inject!() as ActivityBarInjected
+    const firstIds = (): string[] => firstFace.hooks.activities.getSnapshot().map(entry => entry.id)
+    const disposePlugins = slots.register({
+      name: 'shell.activitybar.items', id: 'plugins', order: 100, label: () => 'Plugins',
+    }, () => null)
+    const disposeSchedules = slots.register({
+      name: 'shell.activitybar.items', id: 'schedules', order: 200, label: () => 'Schedules',
+    }, () => null)
+    await vi.waitFor(() => { expect(firstIds()).toEqual(['workspace', 'plugins', 'schedules']) })
+    firstFace.reorder('schedules', 'plugins', 'before')
+    expect(firstIds()).toEqual(['workspace', 'schedules', 'plugins'])
+    expect(JSON.parse(localStorage.getItem(ACTIVITY_ORDER_STORAGE_KEY)!)).toEqual(['workspace', 'schedules', 'plugins'])
+    // A move that leaves the order alone does not rewrite the saved value.
+    firstFace.reorder('schedules', 'workspace', 'after')
+    expect(JSON.parse(localStorage.getItem(ACTIVITY_ORDER_STORAGE_KEY)!)).toEqual(['workspace', 'schedules', 'plugins'])
+    disposePlugins()
+    disposeSchedules()
+    await first.dispose()
+
+    // The next launch reads the saved order before the ledger is populated.
+    const second = ctx.plugin({ inject: [...inject], apply })
+    await second.await()
+    const secondBar = slots.entries('shell.activitybar')[0]!
+    const secondFace = secondBar.inject!() as ActivityBarInjected
+    expect(secondFace.hooks.activities.getSnapshot()).toEqual([{ id: 'workspace', label: 'Workspace', builtIn: true }])
+    const disposeSecondPlugins = slots.register({
+      name: 'shell.activitybar.items', id: 'plugins', order: 100, label: () => 'Plugins',
+    }, () => null)
+    const disposeSecondSchedules = slots.register({
+      name: 'shell.activitybar.items', id: 'schedules', order: 200, label: () => 'Schedules',
+    }, () => null)
+    await vi.waitFor(() => {
+      expect(secondFace.hooks.activities.getSnapshot().map(entry => entry.id))
+        .toEqual(['workspace', 'schedules', 'plugins'])
+    })
+    // An entry that left the ledger is ignored instead of keeping a phantom slot.
+    disposeSecondPlugins()
+    await vi.waitFor(() => {
+      expect(secondFace.hooks.activities.getSnapshot().map(entry => entry.id)).toEqual(['workspace', 'schedules'])
+    })
+    disposeSecondSchedules()
+    await second.dispose()
   })
 
   it('shares a pre-created instance between service actions, root rendering, and panelInfo', async () => {

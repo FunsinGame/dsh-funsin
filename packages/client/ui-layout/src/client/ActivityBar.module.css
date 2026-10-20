@@ -64,6 +64,31 @@
   color: var(--dsw-alias-label-primary);
 }
 
+/* The dragged entry stays in place and dims; the insertion marker below shows
+   where it will land. */
+.entry.entryDragging {
+  opacity: 0.5;
+}
+
+.entry.dropBefore::after,
+.entry.dropAfter::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 2px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.entry.dropBefore::after {
+  top: 0;
+}
+
+.entry.dropAfter::after {
+  bottom: 0;
+}
+
 .entry.entryActive::before {
   content: '';
   position: absolute;

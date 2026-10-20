@@ -16,6 +16,8 @@ The frame exposed exactly one navigation surface — the sidebar's global-panel 
 
 **A status value is a plugin-owned observable.** The bar holds no item state: each entry renders its own content and receives live data through its registration's `hooks` compartment, so a plugin updates its value by publishing to its own source. The leading group takes the remaining width and truncates first; the trailing group never shrinks.
 
+**The rail order is user-owned and persists.** Every rail entry, including the built-in `workspace` entry, is draggable; a drop moves it before or after another entry. The shell persists the resulting complete id order under `dsh.layout.activitybar.v1` in `localStorage` and merges it with the live ledger when it projects the rail: saved ids keep their relative order, newly registered entries append in registration order, and ids whose entry left the ledger are ignored. The rest of the layout store stays transient.
+
 **`viewportWidth` prices content, not the window.** The frame measures its own box and stores `width - 48`, so the column solve, the sidebar breakpoint, the right-column owner share, and the drag-handle offsets all measure the space right of the rail. The Windows fullscreen-panel variable follows the same shift (`rail + sidebar`).
 
 ## Alternatives considered
@@ -24,11 +26,12 @@ The frame exposed exactly one navigation surface — the sidebar's global-panel 
 - **Nest the workbench grid inside the frame.** Extracting the three columns into an inner grid would have rewritten the drag handles, the caption radius, and the fullscreen geometry rules for one new column. Placing the activity area at `grid-column: 2 / -1` in the existing grid reaches the same result by zeroing the column tracks while an activity is selected.
 - **A shared mutable status registry (`ctx.layout.setStatusItem(...)`).** It creates a second source of truth next to the plugin's own state and forces the bar to diff writes. Entry-declared observables already re-render only the entry that changed.
 - **Make the built-in Workspace an ordinary rail entry.** The frame would need the entry's id to dispatch its own composition, so the id would be an implicit cross-package contract; rendering the built-in entry in the frame keeps `workspace` structurally reserved.
+- **Persist the whole layout store.** The store also carries panel geometry and the selected activity, whose transient contract predates this feature; persisting its whole value would turn every measurement into a durable preference. Only the rail order is saved.
 
 ## Consequences
 
 - The frame has four bands; anything asserting frame geometry (the `layout-bottom` browser scenario, the frame spec's track parser) follows the new rows and the rail prefix.
-- The activity rail is a fixed 48px track that never yields, and the selected activity is transient like the rest of the layout store: reload returns to `workspace`.
+- The activity rail is a fixed 48px track that never yields, and the selected activity is transient like the rest of the layout store: reload returns to `workspace`. The rail order is the one persisted layout preference.
 - macOS `shell.leading` and the Windows caption keep their existing insets because the rail occupies the workbench row only; the rail starts below the header band.
 - `ui-layout` now depends on `ui-primitives` for the rail glyph and tooltip; the package is still a leaf (no feature-package value imports).
-- Verification: the activity and status specs drive a real store and stubbed glyphs, the apply spec covers selection validation and the fallback, and `layout-bottom.e2e.ts` records the geometry of both new bands.
+- Verification: the activity and status specs drive a real store and stubbed glyphs, the apply spec covers selection validation, order persistence across a relaunch, and the fallback, and `layout-bottom.e2e.ts` records the geometry of both new bands.

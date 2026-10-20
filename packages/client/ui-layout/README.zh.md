@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包提供 Web GUI 的三栏 AppFrame、左右栏宽度与 `ctx.layout` 呈现控制。右栏先让步以保护中栏空间，全屏由占用方呈现，框架保留宽屏底层轨道。主题呈现器负责配色、别名 token、字号、字体列表与 document 元数据；布局状态在刷新后重置。
+本包提供 Web GUI 的三栏 AppFrame、左右栏宽度与 `ctx.layout` 呈现控制。右栏先让步以保护中栏空间，全屏由占用方呈现，框架保留宽屏底层轨道。主题呈现器负责配色、别名 token、字号、字体列表与 document 元数据；面板几何与选中活动在刷新后重置，活动栏顺序会持久保留。
 
 ## 目录
 
@@ -53,6 +53,8 @@ ctx.slots.inject('shell.activity', () => ctx.slots.register({
 
 内置的 `workspace` 入口是框架自己的组合——侧边栏、主内容与右栏——不是列表项，因此插件无法覆盖它。被选中活动的 `shell.activity` 视图占据活动栏右侧的整块区域，替代三列。选中未注册视图的入口会抛错并保留当前选中；被选中的入口注销后回落到 `workspace`。`ctx.layout.selectActivity(id)` 以编程方式做同样的选中——插件管理器用它从任意位置打开组合包详情——`ctx.layout.activityInfo` 发布当前 id，供需要感知「离开自己的活动」的界面使用。活动栏无论列表是否为空都预留 48px 轨道，`layoutInfo.viewportWidth`（也就是右栏占用方拿到的 `viewportWidth`）是该轨道右侧的宽度，而非窗口宽度。
 
+每个活动栏入口（包括内置的 `workspace` 入口）都可拖到其他入口之上或之下。外壳把结果的 id 顺序存入 `localStorage`（`dsh.layout.activitybar.v1`），并在投影活动栏时重新应用：保存顺序未提到的条目按注册顺序排在后面，已离开条目的 id 会被忽略。选中活动与其余布局状态仍是瞬时状态。
+
 出厂 Plugins 页面是第一个活动：入口绘制插件字形，`shell.activity` 视图就是管理页面，选中即用该页面替代工作台三列。
 
 root 作用域的单一 `shell.bottom` slot 横跨工作台行下方、状态栏上方的整行。占用方控制自身高度与显隐；三列按该高度缩短，空内容不预留空间。切换主面板时保留底部组件。列宽拖拽手柄止于底部内容上方，`shell.overlay` 仍覆盖整个框架。默认组合不占用此 slot。
@@ -95,7 +97,7 @@ Windows Electron 的 `data-windows-titlebar` 标记在所有列上方预留顶�
 
 `selectPanel(id)` 在改变选中态前检查实时 `main` 注册表；缺失的 key 会抛错并保留当前面板。`beginNavigation()` 为异步 UI 导航返回 abort signal。后续调用、有效面板选择（包括重复选择）或布局释放会中止该 signal，但不取消底层会话创建。消费方在提交导航或搬移草稿前检查 signal。
 
-一次注册声明框架的子 slot，并绑定 `ctx.layout` 的 `selectPanel`、`selectActivity`、`toggleSidebar`、`openRightbar(track, fullscreen)` 与 `closeRightbar`。另两次注册占据框架自己的 chrome 座：活动栏声明 `shell.activitybar.items`，状态栏声明 `shell.statusbar.left` 与 `shell.statusbar.right`。三者共用同一个 root 存储，把 `panelInfo` 选中态、`activityInfo` 选中态与 `layoutInfo` 测量、宽度偏好、呈现报告分开。可见的活动栏列表由 `shell.activitybar.items` 账本投影成快照存储（id、order、解析后的标签），在注册与语言变化时刷新；被选中项离开账本时回落到 `workspace`。`ctx.layout.panelInfo` 与标准 `usePanelInfo` hook 共用同一个选中态来源；AppFrame 订阅引用稳定的布局对象。`rightbar` owner 提供实际 `width`、`viewportWidth`，以及表示能否以普通模式呈现的 `canShow`；占用方在空间不足时执行确定性的收起，变宽不自行重新展开。全屏隐藏宽度手柄，但不自行释放占用方要求保留的轨道。AppFrame 保持各列容器挂载。右栏的 root 控制器仅在选中会话界面时，经 `SessionProvider` 渲染 `rightbar.session`；内容卸载时的报告释放轨道。独立的标题组件仅在会话界面可见时使用所选会话标题，以构建配置的产品标题或本地化 `common.brand.localBuild` 为回退值；语言变化会更新该回退值。主题呈现器是第二个 effect：从解析后的快照做纯 DOM 写入——初始状态经 getter 读取一次，此后仅事件驱动，不经过 React。它先应用调色板、字号、字体列表与 token 变量，再把渲染出的背景测量为唯一的颜色依据。全屏呈现禁用网格和手柄过渡；占用方完全覆盖框架后才报告新的列布局。退出全屏时，框架先保持无过渡并安装目标布局：关闭移除右轨道，恢复保留右轨道。后续普通几何操作恢复正常过渡。
+一次注册声明框架的子 slot，并绑定 `ctx.layout` 的 `selectPanel`、`selectActivity`、`toggleSidebar`、`openRightbar(track, fullscreen)` 与 `closeRightbar`。另两次注册占据框架自己的 chrome 座：活动栏声明 `shell.activitybar.items`，状态栏声明 `shell.statusbar.left` 与 `shell.statusbar.right`。三者共用同一个 root 存储，把 `panelInfo` 选中态、`activityInfo` 选中态与 `layoutInfo` 测量、宽度偏好、呈现报告分开。可见的活动栏列表把保存的活动栏顺序与 `shell.activitybar.items` 账本合并成快照存储（id、解析后的标签、内置标记），在注册、重排与语言变化时刷新；已保存的 id 保持相对顺序，未列出的条目按注册顺序跟在后面，被选中项离开账本时回落到 `workspace`。`ctx.layout.panelInfo` 与标准 `usePanelInfo` hook 共用同一个选中态来源；AppFrame 订阅引用稳定的布局对象。`rightbar` owner 提供实际 `width`、`viewportWidth`，以及表示能否以普通模式呈现的 `canShow`；占用方在空间不足时执行确定性的收起，变宽不自行重新展开。全屏隐藏宽度手柄，但不自行释放占用方要求保留的轨道。AppFrame 保持各列容器挂载。右栏的 root 控制器仅在选中会话界面时，经 `SessionProvider` 渲染 `rightbar.session`；内容卸载时的报告释放轨道。独立的标题组件仅在会话界面可见时使用所选会话标题，以构建配置的产品标题或本地化 `common.brand.localBuild` 为回退值；语言变化会更新该回退值。主题呈现器是第二个 effect：从解析后的快照做纯 DOM 写入——初始状态经 getter 读取一次，此后仅事件驱动，不经过 React。它先应用调色板、字号、字体列表与 token 变量，再把渲染出的背景测量为唯一的颜色依据。全屏呈现禁用网格和手柄过渡；占用方完全覆盖框架后才报告新的列布局。退出全屏时，框架先保持无过渡并安装目标布局：关闭移除右轨道，恢复保留右轨道。后续普通几何操作恢复正常过渡。
 
 </details>
 
@@ -130,7 +132,7 @@ Windows Electron 的 `data-windows-titlebar` 标记在所有列上方预留顶�
 
 这些限制界定了当前布局行为。它们是当前包约束，不是通用窗口管理器对比或任务积压。
 
-- **面板几何是瞬时状态**——重新加载会恢复侧栏默认值并隐藏右侧面板；拖动设置的宽度是整个框架共用的一份偏好，而非每个会话各自的属性。
+- **面板几何是瞬时状态**——重新加载会恢复侧栏默认值并隐藏右侧面板；拖动设置的宽度是整个框架共用的一份偏好，而非每个会话各自的属性。活动栏顺序是唯一持久保留的布局偏好。
 - **选中活动同样是瞬时状态**——重新加载回到内置的 `workspace` 活动；状态栏条目自身不持有值，只渲染其注册观测源发布的内容。
 - **极窄窗口**——右侧面板关闭后，中栏仍可能小于 400px；左侧 56px 控制栏仍会保留，48px 活动栏则从不退让。
 - **活动栏是固定 48px 轨道**——即使没有任何注册条目也预留该宽度，插件无法加宽或隐藏它。

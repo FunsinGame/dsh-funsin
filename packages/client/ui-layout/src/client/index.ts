@@ -21,7 +21,10 @@ import type { HostObservable, SnapshotSelectorHook } from '@deepseek-ai/dsh-clie
 import type { ActivityInfo, PanelInfo } from './service.ts'
 import { ActivityBar } from './ActivityBar.tsx'
 import { AppFrame } from './AppFrame.tsx'
-import type { ActivityBarInjected, ActivityEntry, ActivityItemOwnerProps } from './contract.ts'
+import type { ActivityBarInjected, ActivityDropHalf, ActivityEntry, ActivityItemOwnerProps } from './contract.ts'
+import {
+  moveActivityOrder, readActivityOrder, resolveActivityOrder, writeActivityOrder,
+} from './activity-order.ts'
 import { createLayoutStore, WORKSPACE_ACTIVITY } from './stores.ts'
 import { StatusBar } from './StatusBar.tsx'
 import { LayoutController } from './service.ts'
@@ -244,28 +247,51 @@ export function apply(ctx: ClientContext): void {
     const handle = createLayoutStore()
     const instance = handle.create()
     const store: typeof handle = { ...handle, create: () => instance }
+    const workbench = ctx.locale.bind('workbench')
     const retainMainPanels = (): void => {
       instance.actions.retainMainPanels(ctx.slots.entries('main').flatMap(entry =>
         entry.options.key === undefined ? [] : [entry.options.key]))
     }
     // Rail metadata projected from the entry ledger: the shell renders the
-    // buttons, so it needs each entry's id, order, and resolved label.
+    // buttons, so it needs each entry's id and resolved label. The built-in
+    // Workspace entry joins the list so the user can place it among the rest.
+    let savedActivityOrder = readActivityOrder()
     const activities = createSnapshotStore<readonly ActivityEntry[]>([])
     const syncActivities = (): void => {
-      const next = ctx.slots.entriesOfSlot('shell.activitybar.items').map(({ options }) => {
+      const registered = ctx.slots.entriesOfSlot('shell.activitybar.items').map(({ options }) => {
         // The list registration requires an id; StoredEntry erases the slot kind.
         const id = options.id as string
         return { id, order: options.order ?? 0, label: resolveSlotLabel(options.label) ?? id }
       }).sort((a, b) => a.order - b.order)
+      const byId = new Map(registered.map(entry => [entry.id, entry]))
+      const defaultOrder = [WORKSPACE_ACTIVITY, ...registered.map(entry => entry.id)]
+      const next: ActivityEntry[] = []
+      for (const id of resolveActivityOrder(defaultOrder, savedActivityOrder)) {
+        if (id === WORKSPACE_ACTIVITY) {
+          next.push({ id, label: workbench('activity.workspace'), builtIn: true })
+          continue
+        }
+        const entry = byId.get(id)
+        if (entry !== undefined) next.push({ id, label: entry.label, builtIn: false })
+      }
       // The frame's own composition is always selectable; a selected activity
       // whose entry left the ledger falls back to it.
-      instance.actions.retainActivities([WORKSPACE_ACTIVITY, ...next.map(entry => entry.id)])
+      instance.actions.retainActivities(next.map(entry => entry.id))
       const previous = activities.getSnapshot()
       if (previous.length === next.length && previous.every((entry, index) => {
-        const candidate = next[index] as ActivityEntry
-        return entry.id === candidate.id && entry.order === candidate.order && entry.label === candidate.label
+        const candidate = next.at(index)
+        return candidate !== undefined
+          && entry.id === candidate.id && entry.label === candidate.label && entry.builtIn === candidate.builtIn
       })) return
       activities.set(next)
+    }
+    const reorderActivity = (id: string, anchorId: string, half: ActivityDropHalf): void => {
+      const current = activities.getSnapshot().map(entry => entry.id)
+      const next = moveActivityOrder(current, id, anchorId, half)
+      if (next === undefined) return
+      savedActivityOrder = next
+      writeActivityOrder(next)
+      syncActivities()
     }
     const panelInfo: HostObservable<PanelInfo> = {
       getSnapshot: () => instance.getSnapshot().panelInfo,
@@ -315,6 +341,7 @@ export function apply(ctx: ClientContext): void {
       },
       inject: (): ActivityBarInjected => ({
         select: (id) => { layout.selectActivity(id) },
+        reorder: reorderActivity,
         hooks: { activities },
       }),
     }, ActivityBar))
