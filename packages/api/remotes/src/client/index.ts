@@ -75,7 +75,7 @@ export type {} from '@deepseek-ai/dsh-api-terminal-controller/remote'
 export type * from '@deepseek-ai/dsh-api-terminal-controller/types'
 // The forwarded-event allowlist's selection seat: without it in the consumer's
 // compilation face `TypertRemoteEvent` is `never` and every `$on` call fails.
-export type { ApiRemoteForwardedEvent } from '../types.ts'
+export type { ApiRemoteForwardedEvent, ComposerInsertRequest } from '../types.ts'
 // The owner packages' client-safe `./types` exports supply the `Events`
 // signatures `$on` hands to a listener, so a consumer reads the very
 // declaration the Host emits rather than a flattened restatement of it.

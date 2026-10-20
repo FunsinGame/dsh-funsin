@@ -13,17 +13,22 @@
  *
  * @module @deepseek-ai/dsh-client-ui-reference/client
  */
-// Type-only: pulls the generated Remote API and ctx.remote merge through the Client assembly boundary.
-import type {} from '@deepseek-ai/dsh-api-remotes/client'
+// Type-only: pulls the generated Remote API, ctx.remote merge, and the
+// forwarded-event payload faces through the Client assembly boundary.
+import type { ComposerInsertRequest } from '@deepseek-ai/dsh-api-remotes/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+// Type-only: the `file` resource's navigation parameters (`line`) are declared
+// by the text-preview package that owns that tab type.
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import { relativeTime } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { UserTextNodeProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { IConversation, UserTextNodeProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { FileReference, FolderReference, type FileReferenceInjected } from './FileReference.tsx'
+import { fileReferenceLabel, parseFileReferenceTarget } from './reference-target.ts'
 import { fileReferenceRule, folderReferenceRule } from './user-text-rules.ts'
 export type {} from './user-text-rules.ts'
 import type {
@@ -44,7 +49,7 @@ declare module '@deepseek-ai/dsh-api-session-controller/client' {
 
 /** Required services: the trigger registry, the Remote namespaces, and the copy. */
 export const inject = [
-  'inputTriggers', 'locale', 'sessions', 'remote', 'remote.fileReferences',
+  'conversation', 'inputTriggers', 'locale', 'sessions', 'remote', 'remote.fileReferences',
   'remote.sessionReferenceResolver', 'sidebarRight', 'slots', 'uiConversation',
 ]
 
@@ -62,9 +67,11 @@ export function apply(ctx: ClientContext): void {
     yield ctx.slots.register({
       name: 'conversation.user.text.node', key: 'file', priority: 100, locale: NS,
       inject: (sessionId: UserTextNodeProps<'file'>['sessionId']): FileReferenceInjected => ({
-        openFile: (path) => {
+        openFile: (path, line) => {
           const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
-          ctx.sidebarRight.openResource(fileAddressFor(sessionId, cwd, path))
+          const address = fileAddressFor(sessionId, cwd, path)
+          if (line === undefined) ctx.sidebarRight.openResource(address)
+          else ctx.sidebarRight.openResource(address, { params: { line } })
         },
       }),
     }, FileReference)
@@ -163,9 +170,12 @@ export function apply(ctx: ClientContext): void {
     },
     openReference(session, { ref, appearance }) {
       if (appearance !== 'file') return false
-      const path = ref.startsWith('@"') ? ref.slice(2, -1) : ref.slice(1)
+      const target = parseFileReferenceTarget(ref)
+      if (target === undefined) return false
       const cwd = sessions.list.getSnapshot().byId[session.sessionId]?.cwd
-      ctx.sidebarRight.openResource(fileAddressFor(session.sessionId, cwd, path))
+      const address = fileAddressFor(session.sessionId, cwd, target.path)
+      if (target.line === undefined) ctx.sidebarRight.openResource(address)
+      else ctx.sidebarRight.openResource(address, { params: { line: target.line } })
       return true
     },
     codec: {
@@ -175,6 +185,111 @@ export function apply(ctx: ClientContext): void {
   }
   const inputTriggers = ctx.get('inputTriggers') as InputTriggerServiceContract
   ctx.effect(() => inputTriggers.registerSource(source), 'ui-reference: @ source')
+  ctx.effect(
+    () => ctx.remote.$on('composer/insert', (request) => { insertFromExternal(ctx, sessions, request) }),
+    'ui-reference: external composer input',
+  )
+}
+
+/** One result a Client reports back to the waiting Host route. */
+interface ExternalInsertOutcome {
+  readonly ok: boolean
+  readonly sessionId?: string
+  readonly error?: string
+}
+
+/**
+ * Apply one external insertion on this page and answer the Host route.
+ *
+ * Every connected page receives the broadcast; only the page that owns a
+ * matching retained Session edits its composer. The ack is same-origin and
+ * carries the Host-minted request id and token, so no browser cookie or API
+ * token is reused.
+ * @param ctx - client root context.
+ * @param sessions - the Session catalogue and scope resolver.
+ * @param request - the Host broadcast.
+ */
+function insertFromExternal(ctx: ClientContext, sessions: ISessions, request: ComposerInsertRequest): void {
+  const outcome = applyExternalInsert(ctx, sessions, request)
+  void fetch('/external-input/v1/ack', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      requestId: request.requestId,
+      ackToken: request.ackToken,
+      ...outcome,
+    }),
+  }).catch(() => undefined)
+}
+
+/**
+ * Resolve the target Session and place the reference or text at its caret.
+ * @param ctx - client root context.
+ * @param sessions - the Session catalogue and scope resolver.
+ * @param request - the Host broadcast.
+ * @returns whether this page applied the insertion, and why it did not.
+ */
+function applyExternalInsert(
+  ctx: ClientContext,
+  sessions: ISessions,
+  request: ComposerInsertRequest,
+): ExternalInsertOutcome {
+  const conversation = ctx.get('conversation') as IConversation | undefined
+  if (conversation === undefined) return { ok: false, error: 'conversation unavailable' }
+
+  const retained = Object.values(sessions.list.getSnapshot().byId)
+    .filter(row => Object.keys(row.retainedBy).length > 0)
+  const target = (request.sessionId === undefined
+    ? undefined
+    : retained.find(row => row.id === request.sessionId))
+    ?? retained.find(row => (row.retainedBy.mainView ?? 0) > 0)
+    ?? (request.cwd === undefined ? undefined : retained.find(row => samePath(row.cwd, request.cwd)))
+  if (target === undefined) return { ok: false, error: 'no active session' }
+
+  const scope = sessions.scope(target.id)
+  if (scope === undefined) return { ok: false, error: 'no active session' }
+  const input = conversation.input.for(scope)
+
+  if (request.kind === 'text') {
+    if (request.text === undefined) return { ok: false, error: 'bad request' }
+    return input.insertTextAtCaret(request.text)
+      ? { ok: true, sessionId: target.id }
+      : { ok: false, error: 'composer busy' }
+  }
+
+  if (request.path === undefined) return { ok: false, error: 'bad request' }
+  const mention = formatFileMention({ path: request.path, kind: 'file' }, false)
+  if (mention === undefined) return { ok: false, error: 'path cannot be represented' }
+  const fragment = request.startLine === undefined
+    ? ''
+    : `#L${String(request.startLine)}${request.endLine !== undefined && request.endLine !== request.startLine
+      ? `-L${String(request.endLine)}`
+      : ''}`
+  const ref = `${mention}${fragment}`
+  return input.insertReferenceAtCaret({
+    source: 'reference',
+    ref,
+    label: fileReferenceLabel(request.path, request.startLine, request.endLine),
+    appearance: 'file',
+    clipboardText: ref,
+  })
+    ? { ok: true, sessionId: target.id }
+    : { ok: false, error: 'composer busy' }
+}
+
+/**
+ * Compare two workspace paths across the separator and drive-letter spellings
+ * a Windows Host and a Windows editor may use.
+ * @param left - one path.
+ * @param right - the other path.
+ * @returns whether both name the same workspace.
+ */
+function samePath(left: string | undefined, right: string | undefined): boolean {
+  if (left === undefined || right === undefined) return false
+  const normalize = (value: string): string => value.replace(/\\/gu, '/').replace(/\/+$/u, '')
+  const a = normalize(left)
+  const b = normalize(right)
+  return /^[a-zA-Z]:\//u.test(a) ? a.toLowerCase() === b.toLowerCase() : a === b
 }
 
 type Translate = (key: ReferenceKey, params?: Record<string, unknown>) => string

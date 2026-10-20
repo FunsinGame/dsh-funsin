@@ -16,6 +16,44 @@ import type {} from '@deepseek-ai/dsh-schedule/client'
 import type { TypertForwardableEventEntry } from '@deepseek-ai/dsh-typert-protocol'
 
 /**
+ * One external composer insertion request broadcast to every connected Client.
+ * The Host route mints `requestId` and `ackToken`; the Client echoes both on
+ * the same-origin ack that settles the route, while the content fields locate
+ * what to place in the composer.
+ */
+export interface ComposerInsertRequest {
+  /** Host-minted request identity, echoed by the Client ack. */
+  readonly requestId: string
+  /** Single-use ack capability, echoed by the Client ack. */
+  readonly ackToken: string
+  /** `file` inserts a reference chip; `text` inserts plain text at the caret. */
+  readonly kind: 'file' | 'text'
+  /** `kind: 'file'`: absolute path of the referenced file. */
+  readonly path?: string
+  /** `kind: 'file'`: 1-based first line of the referenced range. */
+  readonly startLine?: number
+  /** `kind: 'file'`: 1-based last line of the referenced range. */
+  readonly endLine?: number
+  /** `kind: 'text'`: text to insert. */
+  readonly text?: string
+  /** Optional target Session; otherwise each Client picks its active Session. */
+  readonly sessionId?: string
+  /** Optional workspace path used as a tiebreaker for Session selection. */
+  readonly cwd?: string
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * One external composer insertion request, broadcast to every Client.
+     * @param request - content, target, and ack correlation.
+     * @mode emit
+     */
+    'composer/insert'(request: ComposerInsertRequest): void
+  }
+}
+
+/**
  * Host events this application forwards without renaming. The explicit mode is
  * both the Host dispatch strategy and the legal key set of `ctx.remote.$on`.
  * An `emit` entry declares readers of the resources its payload carries, or
@@ -32,6 +70,7 @@ export const API_REMOTE_FORWARDED_EVENTS = [
   { event: 'api-session/removed', mode: 'emit', resources: { session: (sessionId): SessionId => sessionId } },
   { event: 'api-session/status', mode: 'emit', resources: { session: (sessionId): SessionId => sessionId } },
   { event: 'commands/change', mode: 'emit' },
+  { event: 'composer/insert', mode: 'emit' },
   { event: 'deepseek-account/session-expired', mode: 'emit' },
   { event: 'deepseek-account/model-sign-in-required', mode: 'emit' },
   { event: 'credentials/record-updated', mode: 'emit' },

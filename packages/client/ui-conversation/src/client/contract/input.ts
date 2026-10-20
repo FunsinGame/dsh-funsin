@@ -182,6 +182,18 @@ export interface InputTarget {
 
 /** Per-session input facade owned by the conversation wiring layer. */
 export interface SessionInput extends InputTarget {
+  /**
+   * Insert one reference chip at the live caret (span CAS + phase guards inside).
+   * @param ref - the reference insertion to place.
+   * @returns whether the edit applied.
+   */
+  insertReferenceAtCaret(ref: ReferenceInsert): boolean
+  /**
+   * Insert plain text at the live caret.
+   * @param text - text to insert in one undo step.
+   * @returns whether the edit applied.
+   */
+  insertTextAtCaret(text: string): boolean
   /** Replace the whole draft with plain text, removing inline reference chips. */
   setDraft(text: string): void
   /** Append ordered browser-owned attachment ids; busy admission phases refuse. */

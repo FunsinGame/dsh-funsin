@@ -11,9 +11,10 @@ export interface FileReferenceInjected {
   /**
    * Open or reveal a file in the current Sidebar using the originating Session's authority.
    * @param path - decoded path from the reference.
+   * @param line - optional 1-based line the reference points at.
    * @throws if navigation fails; the reference keeps a local retry/close dialog.
    */
-  readonly openFile: (path: string) => void
+  readonly openFile: (path: string, line?: number) => void
 }
 
 type FileReferenceProps = UserTextNodeProps<'file'> & InjectFace<FileReferenceInjected> & PropsLocale<typeof NS>
@@ -25,11 +26,11 @@ type FileReferenceProps = UserTextNodeProps<'file'> & InjectFace<FileReferenceIn
  */
 export function FileReference({ node, raw, interactive, openFile, t }: FileReferenceProps) {
   const [failedPath, setFailedPath] = useState<string | null>(null)
-  const { path, label } = node.data
+  const { path, label, line } = node.data
   const close = () => { setFailedPath(null) }
   const open = () => {
     try {
-      openFile(path)
+      openFile(path, line)
     } catch {
       setFailedPath(path)
       return

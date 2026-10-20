@@ -11,6 +11,9 @@
 
 import type { API_REMOTE_FORWARDED_EVENTS } from './remote-events.ts'
 
+/** One external composer insertion request, readable from either compiler face. */
+export type { ComposerInsertRequest } from './remote-events.ts'
+
 /** Type projection of the allowlist; the consumer and the Host read this one. */
 export type ApiRemoteForwardedEvent = typeof API_REMOTE_FORWARDED_EVENTS[number]['event']
 

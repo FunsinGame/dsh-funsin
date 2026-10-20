@@ -539,6 +539,18 @@ export class SessionInputShell implements SessionInput {
   }
 
   /**
+   * Insert one reference chip at the live caret (programmatic writes such as
+   * the external editor entry). The span is the caret projection guarded by the
+   * current revision, so the shared insert path applies its phase and CAS
+   * checks exactly as it does to a pick.
+   * @param ref - the reference insertion to place.
+   * @returns whether the edit applied.
+   */
+  insertReferenceAtCaret(ref: ReferenceInsert): boolean {
+    return this.insertReference(ref, { ...this.caretSpan(), draftRev: this.rev })
+  }
+
+  /**
    * Consume one command token after business success (scoped consume-token
    * event listener body). Span guard: revision CAS then splice; bare-token
    * guard: trimmed-draft equality then clear.
@@ -572,6 +584,15 @@ export class SessionInputShell implements SessionInput {
     void keepCompleting
     if (span.draftRev !== this.rev) return false
     return this.draftEditor.replaceText(span, text)
+  }
+
+  /**
+   * Insert plain text at the live caret without replacing the rest of the draft.
+   * @param text - text to insert in one undo step.
+   * @returns whether the edit applied.
+   */
+  insertTextAtCaret(text: string): boolean {
+    return this.insertText(text, { ...this.caretSpan(), draftRev: this.rev })
   }
 
   /**
