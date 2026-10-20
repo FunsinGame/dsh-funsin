@@ -62,7 +62,7 @@ it('persists the Git Worktrees switch and removes its capability while retaining
     return manifest.dsh.profile.bundles
   }
   const openPlugins = async () => {
-    await page.getByRole('navigation', { name: 'Global panels' }).getByRole('button', { name: 'Plugins', exact: true }).click()
+    await page.getByRole('navigation', { name: 'Activity bar' }).getByRole('button', { name: 'Plugins', exact: true }).click()
     const panel = page.locator('[data-plugin-panel]')
     await panel.getByRole('heading', { name: 'Plugins', exact: true }).waitFor()
     await panel.getByRole('button', { name: 'More', exact: true }).click()

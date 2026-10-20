@@ -13,8 +13,8 @@ afterEach(() => {
 })
 
 const HOLES = [
-  'sidebar.brand.mark',
-  'sidebar.brand.name',
+  'shell.header.brand.mark',
+  'shell.header.brand.name',
 ] as const
 
 const HERO_HOLE = 'conversation.hero.brand.mark'

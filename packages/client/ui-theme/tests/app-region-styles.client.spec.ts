@@ -73,6 +73,12 @@ const CHROME_ROWS: readonly ChromeRow[] = [
     inset: ['inset', '8px'],
   },
   {
+    file: 'client/ui-sidebar/src/client/FrameBrand.module.css',
+    selector: '.bar',
+    markup: 'client/ui-sidebar/src/client/FrameBrand.tsx',
+    height: ['height', '36px'],
+  },
+  {
     file: SIDEBAR,
     selector: '.topStrip',
     markup: 'client/ui-sidebar/src/client/SidebarRoot.tsx',

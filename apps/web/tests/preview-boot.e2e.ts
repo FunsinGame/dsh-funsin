@@ -605,7 +605,7 @@ async function requestLazyChunk(page: Page, site: Site, manifest: ImageManifest)
  * @param page - Booted preview page.
  */
 async function toggleOptionalBundles(page: Page): Promise<void> {
-  await page.getByRole('navigation', { name: 'Global panels' }).getByRole('button', { name: 'Plugins', exact: true }).click()
+  await page.getByRole('navigation', { name: 'Activity bar' }).getByRole('button', { name: 'Plugins', exact: true }).click()
   const panel = page.locator('[data-plugin-panel]')
   const cards = panel.locator('[data-plugin-group="extensions"] [data-plugin-package]')
   await cards.first().waitFor({ timeout: 30_000 })

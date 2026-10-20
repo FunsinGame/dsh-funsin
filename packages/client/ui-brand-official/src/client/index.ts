@@ -8,16 +8,16 @@ import { OfficialBrandMark, OfficialBrandName } from './Brand.tsx'
 export const inject = ['slots']
 
 /**
- * Fill the sidebar brand slots as one declaration-aware registration set. The
+ * Fill the frame brand slots as one declaration-aware registration set. The
  * conversation hero stays on its declaring package's animated fish fallback,
  * so the official build registers nothing there.
  * @param ctx - Client root context.
  */
 export function apply(ctx: ClientContext): void {
   if (process.env.DSH_CLIENT_BUILD_PROFILE !== 'official') return
-  ctx.slots.inject('sidebar.brand.mark', () =>
-    ctx.slots.inject('sidebar.brand.name', function* () {
-      yield ctx.slots.register({ name: 'sidebar.brand.mark' }, OfficialBrandMark)
-      yield ctx.slots.register({ name: 'sidebar.brand.name' }, OfficialBrandName)
+  ctx.slots.inject('shell.header.brand.mark', () =>
+    ctx.slots.inject('shell.header.brand.name', function* () {
+      yield ctx.slots.register({ name: 'shell.header.brand.mark' }, OfficialBrandMark)
+      yield ctx.slots.register({ name: 'shell.header.brand.name' }, OfficialBrandName)
     }))
 }

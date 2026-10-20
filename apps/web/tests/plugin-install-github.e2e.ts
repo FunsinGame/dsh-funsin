@@ -58,7 +58,7 @@ it.each(['network', 'timeout'] as const)('offers a mirror after a GitHub %s, the
   await page.goto(scaffold.authenticatedUrl)
   await page.waitForSelector('[class*="frame"]')
   if (await page.getByRole('dialog', { name: '设置' }).count() > 0) await page.keyboard.press('Escape')
-  await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
+  await page.getByRole('navigation', { name: '功能入口' }).getByRole('button', { name: '插件', exact: true }).click()
   await page.getByRole('button', { name: '添加插件', exact: true }).click()
   const spec = 'https://github.com/example/dsh-plugin.git'
   const title = failure === 'timeout' ? '连接 GitHub 超时' : '无法访问 GitHub'

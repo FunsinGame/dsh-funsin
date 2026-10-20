@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { allowAllAccess, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import type { ReactNode } from 'react'
 import type {
   SidebarFooterActionOwnerProps, SidebarRootComponentProps, SidebarSectionOwnerProps,
   SidebarSettingsOwnerProps,
@@ -45,8 +44,6 @@ function mountShell({ collapsed = false, width = 300, shortcuts = [] }: {
   let regionOwner: SidebarSectionOwnerProps | undefined
   let settingsOwner: SidebarSettingsOwnerProps | undefined
   let footerActionOwner: SidebarFooterActionOwnerProps | undefined
-  const brandMark = <span data-testid="custom-brand-mark">M</span>
-  const brandName = <span data-testid="custom-brand-name">Custom Brand</span>
   let current = { collapsed, width }
   const root = () => (
     <SidebarRoot
@@ -60,8 +57,6 @@ function mountShell({ collapsed = false, width = 300, shortcuts = [] }: {
         key: string,
         owner: SidebarFooterActionOwnerProps | SidebarSectionOwnerProps | SidebarSettingsOwnerProps,
       ) => {
-        if (key === 'sidebar.brand.mark') return brandMark
-        if (key === 'sidebar.brand.name') return brandName
         if (key === 'sidebar.toggle.badge') return null
         if (key === 'sidebar.settings') {
           settingsOwner = owner
@@ -123,72 +118,16 @@ describe('SidebarRoot shell', () => {
     fireEvent.focus(button)
     expect(Array.from(screen.getByRole('tooltip').querySelectorAll('kbd'), key => key.textContent)).toEqual(['Ctrl', 'N'])
   })
-  it('routes New Session (capsule + wordmark) and the column toggle', () => {
+  it('routes New Session and the column toggle', () => {
     const b = mountShell()
-    expect(screen.getByTestId('custom-brand-mark')).toBeTruthy()
-    expect(screen.getByTestId('custom-brand-name')).toBeTruthy()
-    // Expanded, both the wordmark and the capsule start a session.
+    // The wordmark lives in the frame's brand band; the capsule is the only
+    // New Session control in this column.
     const starters = screen.getAllByRole('button', { name: 'New session' })
-    expect(starters).toHaveLength(2)
-    for (const button of starters) fireEvent.click(button)
-    expect(b.startSession).toHaveBeenCalledTimes(2)
+    expect(starters).toHaveLength(1)
+    fireEvent.click(starters[0]!)
+    expect(b.startSession).toHaveBeenCalledOnce()
     fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
     expect(b.toggleSidebar).toHaveBeenCalledOnce()
-  })
-
-  it('renders generic brand fallbacks when no package fills the slots', () => {
-    vi.stubEnv('DSH_CLIENT_COMMIT_HASH', '0123456')
-    vi.stubEnv('DSH_CLIENT_GIT_DIRTY', 'true')
-    vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
-    const { container } = render(<SidebarRoot
-      collapsed={false} width={300}
-      useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
-      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useShortcuts={selector => selector([])}
-      useResource={useResource} useWorkspaces={neverHook}
-      {...allowAllAccess}
-      startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
-      renderSlot={((_key: string, _owner: unknown, options?: { fallback?: ReactNode }) =>
-        options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
-    />)
-
-    expect(screen.getByText('DSH Local Build')).toBeTruthy()
-    expect(screen.getByText('1.2.3-rc.4-0123456-dirty')).toBeTruthy()
-    expect(container.querySelector('svg')).not.toBeNull()
-  })
-
-  it.each([
-    [{ DSH_CLIENT_VERSION: '1.2.3' }, '1.2.3'],
-    [{ DSH_CLIENT_COMMIT_HASH: 'abcdef0', DSH_CLIENT_VERSION: '1.2.3' }, '1.2.3-abcdef0'],
-  ])('omits unavailable build-version suffixes from %j', (environment, expected) => {
-    for (const [name, value] of Object.entries(environment)) vi.stubEnv(name, value)
-    render(<SidebarRoot
-      collapsed={false} width={300}
-      useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
-      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useShortcuts={selector => selector([])}
-      useResource={useResource} useWorkspaces={neverHook}
-      {...allowAllAccess}
-      startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
-      renderSlot={((_key: string, _owner: unknown, options?: { fallback?: ReactNode }) =>
-        options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
-    />)
-
-    expect(screen.getByText('DSH Local Build')).toBeTruthy()
-    expect(screen.getByText(expected)).toBeTruthy()
-  })
-
-  it('retains the local-build fallback without complete build metadata', () => {
-    render(<SidebarRoot
-      collapsed={false} width={300}
-      useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
-      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useShortcuts={selector => selector([])}
-      useResource={useResource} useWorkspaces={neverHook}
-      {...allowAllAccess}
-      startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
-      renderSlot={((_key: string, _owner: unknown, options?: { fallback?: ReactNode }) =>
-        options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
-    />)
-
-    expect(screen.getByText('DSH Local Build')).toBeTruthy()
   })
 
   it('hands the region its wide flag and clamps expandSidebar to the collapsed state', () => {
@@ -257,11 +196,9 @@ it('keeps the macOS sidebar toggle in its top strip', () => {
   const shell = mountShell()
   fireEvent.click(screen.getByRole('button', { name: en['toggle.collapse'] }))
   expect(shell.toggleSidebar).toHaveBeenCalledOnce()
-  // The brand stays part of the logo row's window-drag surface: no button
-  // role (the global no-drag rule would subtract it); only the dedicated
-  // New Session capsule starts a session.
+  // Only the dedicated New Session capsule starts a session; the wordmark
+  // moved to the frame's brand band.
   expect(screen.getAllByRole('button', { name: 'New session' })).toHaveLength(1)
-  expect(screen.getByTestId('custom-brand-mark')).toBeTruthy()
 })
 
 it('wires the shell.leading controls to the shared sidebar actions', () => {
@@ -312,29 +249,23 @@ describe('Windows caption tooltips', () => {
   })
 })
 
-describe('Windows caption brand', () => {
+describe('Windows caption insets', () => {
   afterEach(() => { document.documentElement.removeAttribute('data-windows-titlebar') })
 
-  it('moves the wordmark into the caption and reserves its width for the caption controls', () => {
+  it('reserves the caption controls and menus without a caption wordmark', () => {
     document.documentElement.setAttribute('data-windows-titlebar', '')
     const shell = mountShell()
-    const caption = document.querySelector('[data-windows-caption-brand]')
-    expect(caption?.textContent).toContain('Custom Brand')
-    expect(caption?.querySelector('[data-testid="custom-brand-mark"]')).not.toBeNull()
-    // The wordmark is no longer a sidebar New Session button; the capsule is.
+    // The wordmark heads the frame's own brand band, below the caption.
+    expect(document.querySelector('[data-windows-caption-brand]')).toBeNull()
     expect(screen.getAllByRole('button', { name: 'New session' })).toHaveLength(1)
     // The expanded caption is clean: no sidebar collapse control.
     expect(screen.queryByRole('button', { name: 'Collapse sidebar' })).toBeNull()
-    // The measured wordmark box publishes both caption insets (jsdom reports a
-    // zero-width box, so only their relationship is asserted).
-    const expandedStart = Number.parseInt(document.documentElement.style.getPropertyValue('--dsh-windows-menu-start'), 10)
-    const controlsStart = Number.parseInt(document.documentElement.style.getPropertyValue('--dsh-windows-caption-controls-start'), 10)
-    expect(expandedStart).toBe(controlsStart)
-    // The collapsed caption adds the expand control and New Session between the brand and the menus.
+    expect(document.documentElement.style.getPropertyValue('--dsh-windows-caption-controls-start')).toBe('var(--dsh-windows-brand-end, 180px)')
+    expect(document.documentElement.style.getPropertyValue('--dsh-windows-menu-start')).toBe('calc(var(--dsh-windows-caption-controls-start, 180px) + 0px)')
+    // The collapsed caption adds the expand control and New Session before the menus.
     shell.rerender({ collapsed: true, width: 0 })
     expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeTruthy()
-    const collapsedStart = Number.parseInt(document.documentElement.style.getPropertyValue('--dsh-windows-menu-start'), 10)
-    expect(collapsedStart - expandedStart).toBe(72)
+    expect(document.documentElement.style.getPropertyValue('--dsh-windows-menu-start')).toBe('calc(var(--dsh-windows-caption-controls-start, 180px) + 72px)')
     // The chrome insets leave with the shell.
     cleanup()
     expect(document.documentElement.style.getPropertyValue('--dsh-windows-menu-start')).toBe('')

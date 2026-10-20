@@ -1,0 +1,87 @@
+/*
+ * Activity rail. The frame owns the 48px track; this element owns the content
+ * inside it. Entries are a single vertical run of 40px buttons, each carrying
+ * its own accessible name and the shared hover/selected surfaces; the selected
+ * entry adds one 2px bar on the frame edge, the only landmark a glyph-only
+ * column can carry in both themes.
+ */
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  padding: 8px 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: var(--dsw-specific-sidebar-fill);
+}
+
+/* The function entries scroll; the foot below never moves with them. */
+.entries {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.footer {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding-top: 4px;
+}
+
+.entry {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.entry:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.entry.entryActive {
+  color: var(--dsw-alias-label-primary);
+}
+
+.entry.entryActive::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: -4px;
+  width: 2px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.entry:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+.glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

@@ -1,5 +1,5 @@
 /**
- * Frame-wide Workspace tab strip, the `shell.header` occupant: one tab per
+ * Workspace tab strip, the `shell.workspace.tabs` occupant: one tab per
  * registered Workspace in durable registry order with the current Workspace
  * selected.
  *
@@ -56,7 +56,7 @@ function tabHalf(event: { clientX: number; currentTarget: HTMLElement }): 'befor
 
 /**
  * Render the Workspace tab strip.
- * @param props - `shell.header` owner share, the strip's directory-flow hole, injected actions, and the locale seat.
+ * @param props - `shell.workspace.tabs` owner share, the strip's directory-flow hole, injected actions, and the locale seat.
  * @returns the strip element tree.
  */
 export function WorkspaceTabs({
@@ -255,7 +255,7 @@ export function WorkspaceTabs({
         useWorkspaces={useWorkspaces}
         createWorkspace={createWorkspace}
         useDirectoryFlow={useDirectoryFlow}
-        renderDirectoryFlow={owner => renderSlot('shell.header.directoryFlow', owner)}
+        renderDirectoryFlow={owner => renderSlot('shell.workspace.tabs.directoryFlow', owner)}
         addOnly
         onBusyChange={setDirectoryBusy}
         onPick={(workspaceId) => {

@@ -17,6 +17,13 @@ export const SIDEBAR_MAX = 420
 export const SIDEBAR_DEFAULT = 280
 /** Closed-sidebar rail: a 24px icon column between 16px horizontal paddings. */
 export const SIDEBAR_COLLAPSED = 56
+/**
+ * Activity bar column width. The frame owns the track; the occupant owns only
+ * its content. `layoutInfo.viewportWidth` is the width remaining right of this
+ * track, so the column solve and the sidebar breakpoint measure the content
+ * area rather than the window.
+ */
+export const ACTIVITY_RAIL_WIDTH = 48
 /** Viewport width below which the sidebar auto-collapses to the rail (deepsuite
  * LG breakpoint); a manual toggle below it re-expands over the squeezed center
  * (stores.ts narrowExpanded). */

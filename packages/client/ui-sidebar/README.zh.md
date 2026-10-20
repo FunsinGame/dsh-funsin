@@ -27,11 +27,11 @@ dsh Web 客户端的侧边栏让用户识别当前构建、启动新会话、将
 <a id="use-this-package"></a>
 ## 使用本包
 
-侧边栏是导航外壳：用户看到品牌、启动新会话、折叠轨道并到达 Settings。功能插件填充它的席位——ui-workspace 填充 `sidebar.workspaces`，ui-settings 在 `sidebar.settings` 注册触发行与设置面板。
+侧边栏是导航外壳：用户启动新会话、折叠轨道并打开全局面板。功能插件填充它的席位——ui-workspace 填充 `sidebar.workspaces`，ui-settings 在 `sidebar.settings` 注册触发行与设置面板。
 
-### 品牌与 New Session
+### New Session 与框架品牌
 
-展开的品牌行把 `sidebar.brand.mark` 与 `sidebar.brand.name` 渲染为两个独立的 single slot；收起轨道则渲染同一个 mark slot。在 Web 上，点击展开态的品牌会新建会话，悬停或聚焦时不显示 tooltip；Windows 桌面端的顶栏把同样的两个 slot 渲染为拖拽面而非按钮（见下文），macOS 顶部条同样保持不可交互。没有占位者时，外壳使用鱼形标记和本地化的本地构建标签。完整构建会在标签下方显示代码徽标；该徽标使用 `DSH_CLIENT_VERSION`、可选的 7 位 `DSH_CLIENT_COMMIT_HASH` 与 `DSH_CLIENT_GIT_DIRTY=true` 组装成 `version[-commit][-dirty]`；缺少版本元数据时不显示徽标。New Session 优先使用作用域操作明确指定的 Workspace，否则使用当前 Session 所属 Workspace，再否则使用最近活跃 Workspace；一个 Workspace 都没有时则清空选择，进入空白 New Session 页面。 展开态的新建会话按钮在悬停或键盘聚焦时于右侧以灰色文字显示当前有效绑定。快捷键可见且空间较窄时，居中的图标与文字在快捷键之前渐隐；CSS 为快捷键保留宽度，无需测量按钮。纯图标控件保留使用平台键位样式的 tooltip，侧栏隐藏时常驻的 macOS 头部控件也保持一致。所有控件均提供 `aria-keyshortcuts`。
+字标不属于本列：本包把 `FrameBrand` 注册进框架的 `shell.header` 区带，由它把 `shell.header.brand.mark` 与 `shell.header.brand.name` 渲染为两个独立的 single slot，并在任何活动下常驻。品牌是纯展示元素，不触发操作；在 Windows 桌面端它固定覆盖在窗口顶栏那一行、与原生菜单同排（见下文）。没有占位者时，外壳使用睡觉的小鲸鱼标记与 `deepsleep` 字标。完整构建会在字标旁显示代码徽标；该徽标使用 `DSH_CLIENT_VERSION`、可选的 7 位 `DSH_CLIENT_COMMIT_HASH` 与 `DSH_CLIENT_GIT_DIRTY=true` 组装成 `version[-commit][-dirty]`；缺少版本元数据时不显示徽标。New Session 优先使用作用域操作明确指定的 Workspace，否则使用当前 Session 所属 Workspace，再否则使用最近活跃 Workspace；一个 Workspace 都没有时则清空选择，进入空白 New Session 页面。 展开态的新建会话按钮在悬停或键盘聚焦时于右侧以灰色文字显示当前有效绑定。快捷键可见且空间较窄时，居中的图标与文字在快捷键之前渐隐；CSS 为快捷键保留宽度，无需测量按钮。纯图标控件保留使用平台键位样式的 tooltip，侧栏隐藏时常驻的 macOS 头部控件也保持一致。所有控件均提供 `aria-keyshortcuts`。
 
 ### 全局面板入口
 
@@ -45,7 +45,7 @@ dsh Web 客户端的侧边栏让用户识别当前构建、启动新会话、将
 
 实时收起时，展开内容在当前宽度淡出，上方控件共用同一段透明度渐变，并向左平移进入 56px 轨道，由布局的栏滑动结束整段动画。页面初始即为收起状态时会静态渲染轨道；减少动态效果模式会禁用两段过渡。固定在底部的 `sidebar.settings` 控件共用相同的透明度渐变时序，但不发生横向位移。
 
-在 Windows Electron 中，`html[data-windows-titlebar]` 把品牌移入顶栏：字标位于窗口最左侧，侧栏的 logo 行不再占用高度，因此展开态顶栏从左到右依次是品牌、Desktop 菜单。侧栏开关在展开态隐藏，仅在收起态以“展开”控件的形式回到顶栏，新建会话紧随其后、排在菜单之前。此时品牌是拖拽面而不是新建会话快捷入口，新建会话由专用按钮负责。由于字标宽度取决于语言、品牌占位者与构建徽标，外壳会测量它，并在根元素上发布 `--dsh-windows-caption-controls-start`（第一个顶栏控件的左边缘）与 `--dsh-windows-menu-start`（菜单的左边缘，仅在收起态为展开控件与新建会话预留位置）；Desktop preload 用后者定位菜单，默认值为 48px。顶栏图标按钮采用紧凑控件圆角的 28px 控件，图标为居中 16px，并从窗口拖拽区域中排除。展开控件与新建会话的悬停提示在顶栏下方展开，Desktop 菜单文字不会盖住它们；占用 `sidebar.toggle.badge` 的控件自行决定气泡展开方向。从展开态收起使用键盘命令（`sidebar.left.toggle`）；`sidebar.toggle.badge` 槽位只在收起态的顶栏控件内渲染。
+在 Windows Electron 中，`html[data-windows-titlebar]` 把字标放回窗口顶栏自身那一行、位于 Desktop 菜单左侧：FrameBrand 以固定定位覆盖顶栏（框架品牌区带在此时折叠为零高），并发布 `--dsh-windows-brand-end`，顶栏控件与原生菜单从该位置开始。侧栏顶部行只保留开关。侧栏开关在展开态隐藏，仅在收起态以“展开”控件的形式回到顶栏，新建会话紧随其后、排在菜单之前。此时品牌是拖拽面而不是新建会话快捷入口，新建会话由专用按钮负责。由于字标宽度取决于语言、品牌占位者与构建徽标，FrameBrand 会测量自身并在根元素上发布 `--dsh-windows-brand-end`；侧栏据此发布 `--dsh-windows-caption-controls-start` 与 `--dsh-windows-menu-start`（同一左边缘，仅在收起态再加上展开控件与新建会话）。Desktop preload 用后者定位菜单，默认值为 48px。顶栏图标按钮采用紧凑控件圆角的 28px 控件，图标为居中 16px，并从窗口拖拽区域中排除。展开控件与新建会话的悬停提示在顶栏下方展开，Desktop 菜单文字不会盖住它们；占用 `sidebar.toggle.badge` 的控件自行决定气泡展开方向。从展开态收起使用键盘命令（`sidebar.left.toggle`）；`sidebar.toggle.badge` 槽位只在收起态的顶栏控件内渲染。
 
 ### macOS 桌面
 

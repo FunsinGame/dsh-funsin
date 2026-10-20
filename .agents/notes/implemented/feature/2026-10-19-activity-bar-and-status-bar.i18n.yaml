@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-19-activity-bar-and-status-bar.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-19-activity-bar-and-status-bar.md
+/agent-note-activity-bar-and-status-bar:
+  en: c6e3b8ce2218538b
+  zh: d6ba9d1dc3cba161
+/agent-note-activity-bar-and-status-bar/problem:
+  en: 6c57e1ec3e9ba031
+  zh: 43d97464edc665eb
+/agent-note-activity-bar-and-status-bar/decision:
+  en: 458b389c9a332c16
+  zh: cae7fd38353531a0
+/agent-note-activity-bar-and-status-bar/alternatives-considered:
+  en: bcf3ada06a0c1a2c
+  zh: a0b37c561769960a
+/agent-note-activity-bar-and-status-bar/consequences:
+  en: 3485636c813b4b36
+  zh: 0db3ff38e6dff49d

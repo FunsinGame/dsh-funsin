@@ -12,6 +12,7 @@ describe('createLayoutStore', () => {
     const { store } = createLayoutStore().create()
     expect(store.getSnapshot()).toEqual({
       panelInfo: { activePanelId: null },
+      activityInfo: { activeId: 'workspace' },
       layoutInfo: {
         sidebar: 280,
         viewportWidth: 1920,
@@ -288,5 +289,43 @@ describe('right panel instant geometry', () => {
     actions.closeRightbar()
     actions.openRightbar(true, fullscreen)
     expect(store.getSnapshot().layoutInfo).toMatchObject({ rightbarShown: true, rightbarFullscreen: fullscreen, rightbarInstant: false })
+  })
+})
+
+describe('activity selection', () => {
+  it('changes only activityInfo when switching activities', () => {
+    const { store, actions } = createLayoutStore().create()
+    actions.setSidebar(400)
+    actions.openRightbar(true, true)
+    const { layoutInfo } = store.getSnapshot()
+    for (const activeId of ['plugins', 'schedules', 'workspace']) {
+      const previous = store.getSnapshot()
+      actions.selectActivity(activeId)
+      expect(store.getSnapshot().activityInfo).toEqual({ activeId })
+      expect(store.getSnapshot().activityInfo).not.toBe(previous.activityInfo)
+      expect(store.getSnapshot().layoutInfo).toBe(layoutInfo)
+    }
+  })
+
+  it('keeps the complete snapshot when selecting the current activity again', () => {
+    const { store, actions } = createLayoutStore().create()
+    actions.selectActivity('plugins')
+    const selected = store.getSnapshot()
+    actions.selectActivity('plugins')
+    expect(store.getSnapshot()).toBe(selected)
+  })
+
+  it('falls back to the workspace composition only when the selected entry disappears', () => {
+    const { store, actions } = createLayoutStore().create()
+    const initial = store.getSnapshot()
+    actions.retainActivities(['workspace'])
+    expect(store.getSnapshot()).toBe(initial)
+    actions.selectActivity('plugins')
+    const selected = store.getSnapshot()
+    actions.retainActivities(['workspace', 'plugins', 'schedules'])
+    expect(store.getSnapshot()).toBe(selected)
+    actions.retainActivities(['workspace', 'schedules'])
+    expect(store.getSnapshot().activityInfo).toEqual({ activeId: 'workspace' })
+    expect(store.getSnapshot().layoutInfo).toBe(selected.layoutInfo)
   })
 })

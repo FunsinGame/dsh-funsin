@@ -38,9 +38,9 @@ import badgeSkillPreviewZh from './assets/badge-skill-preview.zh.svg'
 import voiceInputPreview from './assets/voice-input-preview.svg'
 import voiceInputPreviewZh from './assets/voice-input-preview.zh.svg'
 
-/** Full component props assembled by the main slot renderer. */
+/** Full component props assembled by the activity-slot renderer. */
 export type PluginManagerPageProps =
-  PropsRuntime<'main'>
+  PropsRuntime<'shell.activity'>
   & PropsLocale<'pluginManager'>
   & PropsRenderSlots<
     | 'plugins.item' | 'plugins.bundle.config' | 'plugins.row.config' | 'plugins.bundle.activation'

@@ -27,6 +27,7 @@
     "tests/fold-blank-matrix.e2e.ts",
     "tests/chat-flow-layout.e2e.ts",
     "tests/layout-bottom.e2e.ts",
+    "tests/windows-caption-band.e2e.ts",
     "tests/shortcuts-desktop.e2e.ts",
     "tests/shortcuts-workspace.e2e.ts",
     "tests/shortcuts-panels.e2e.ts",

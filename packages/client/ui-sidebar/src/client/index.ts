@@ -13,13 +13,15 @@ import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SidebarPanelMetadata, SidebarRootInjected } from './contract/slots.ts'
 import { HeaderLeadingControls } from './HeaderLeadingControls.tsx'
 import { SidebarRoot } from './SidebarRoot.tsx'
+import { FrameBrand } from './FrameBrand.tsx'
 import { en, zh, type SidebarKey } from './locales.ts'
 
 export type {
-  SidebarBrandMarkOwnerProps, SidebarBrandNameOwnerProps, SidebarFooterActionOwnerProps,
+  BrandMarkOwnerProps, BrandNameOwnerProps, SidebarFooterActionOwnerProps,
   SidebarPanelIconOwnerProps, SidebarPanelMetadata,
   SidebarRootComponentProps, SidebarRootInjected, SidebarSectionOwnerProps, SidebarSettingsOwnerProps,
 } from './contract/slots.ts'
+export type { FrameBrandProps } from './FrameBrand.tsx'
 export type { SidebarKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -77,8 +79,6 @@ export function apply(ctx: ClientContext): void {
     name: 'sidebar',
     locale: NS,
     children: {
-      'sidebar.brand.mark': { kind: 'single', scope: 'root' },
-      'sidebar.brand.name': { kind: 'single', scope: 'root' },
       'sidebar.toggle.badge': { kind: 'single', scope: 'root' },
       'sidebar.panellist': { kind: 'list', scope: 'root' },
       'sidebar.workspaces': { kind: 'single', scope: 'root' },
@@ -87,6 +87,16 @@ export function apply(ctx: ClientContext): void {
     },
     inject: injectProps,
   }, SidebarRoot))
+  // The wordmark lives in the frame's top band, outside every activity, so
+  // switching activities never takes the brand away with the sidebar.
+  ctx.slots.inject('shell.header', () => ctx.slots.register({
+    name: 'shell.header',
+    locale: NS,
+    children: {
+      'shell.header.brand.mark': { kind: 'single', scope: 'root' },
+      'shell.header.brand.name': { kind: 'single', scope: 'root' },
+    },
+  }, FrameBrand))
   // macOS desktop hides the collapsed sidebar entirely, so the open/New
   // Session controls move into the frame's window-chrome seat beside the
   // traffic lights; the occupant reuses the shell's injected actions, and

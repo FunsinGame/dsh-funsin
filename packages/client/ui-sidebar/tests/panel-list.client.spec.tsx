@@ -39,9 +39,11 @@ async function bench(collapsed = false) {
   locale.setLocale('en')
   const layout = {
     panelInfo: runtime.panelInfo,
+    activityInfo: createSnapshotStore({ activeId: 'workspace' }),
     beginNavigation: vi.fn(() => new AbortController().signal),
     toggleSidebar: vi.fn(),
     selectPanel: vi.fn((activePanelId: MainPanelId | null) => { runtime.panelInfo.set({ activePanelId }) }),
+    selectActivity: vi.fn(),
     openRightbar: vi.fn(),
     closeRightbar: vi.fn(),
   } satisfies ILayout

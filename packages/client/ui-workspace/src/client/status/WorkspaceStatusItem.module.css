@@ -1,0 +1,18 @@
+/*
+ * One status-bar value. The strip supplies the ink, size, and line height; this
+ * entry only keeps the glyph beside the name and lets a long Workspace name
+ * truncate inside the leading group instead of pushing the trailing group out.
+ */
+
+.item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

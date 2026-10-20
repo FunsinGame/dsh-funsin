@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render } from '@testing-library/react'
 import { AppFrame } from '../src/client/AppFrame.tsx'
 import type { AppFrameProps } from '../src/client/AppFrame.tsx'
+import { ACTIVITY_RAIL_WIDTH } from '../src/client/columns.ts'
 import type { MainPanelId, RightbarOwnerProps, SidebarOwnerProps } from '../src/client/index.ts'
 import { createLayoutStore } from '../src/client/stores.ts'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
@@ -29,7 +30,9 @@ class ResizeObserverStub {
   fire(): void { this.callback([], this) }
 }
 
-let frameWidth: number
+// Workbench content width: the specs reason in the space right of the activity
+// rail, while the stubbed frame box reports that width plus the rail.
+let contentWidth: number
 let animationFrames: Map<number, FrameRequestCallback>
 let nextFrame: number
 let originalTitle: string
@@ -53,14 +56,14 @@ function flushFrames(): void {
 }
 
 function resize(width: number): void {
-  frameWidth = width
+  contentWidth = width
   act(() => {
     for (const observer of observers) if (!observer.disconnected) observer.fire()
     flushFrames()
   })
 }
 
-function mountFrame(windowWidth = frameWidth) {
+function mountFrame(windowWidth = contentWidth) {
   vi.stubGlobal('innerWidth', windowWidth)
   const instance = createLayoutStore().create()
   const slotCalls: { key: string; props: object; options: RenderOpts | undefined }[] = []
@@ -100,7 +103,7 @@ function mountFrame(windowWidth = frameWidth) {
       useResource={useResource}
       useWorkspaces={sel => sel(workspaceState)}
       {...allowAllAccess}
-      t={key => key === 'brand.localBuild' ? 'DSH Local Build' : key}
+      t={key => key === 'brand.name' ? 'deepsleep' : key}
     />
   )
   const utils = render(element())
@@ -114,14 +117,17 @@ function mountFrame(windowWidth = frameWidth) {
 }
 
 /* The template delegates the squeeze to the grid (jsdom does no layout, so
-   specs read the specified tracks): [sidebar px, rightbar growth limit].
-   The centre's protected minimum must accompany an open right track. */
+   specs read the specified tracks): [activity rail px, sidebar px, rightbar
+   growth limit]. The centre's protected minimum must accompany an open right
+   track. */
 function tracks(frame: HTMLElement): number[] {
-  const match = /^([\d.]+)px minmax\((0|400)px, 1fr\) minmax\(0px, ([\d.]+)px\)$/.exec(frame.style.gridTemplateColumns)
+  const match = /^(48)px ([\d.]+)px minmax\((0|400)px, 1fr\) minmax\(0px, ([\d.]+)px\)$/.exec(frame.style.gridTemplateColumns)
   if (match === null) throw new Error(`unexpected template: ${frame.style.gridTemplateColumns}`)
-  const rightbar = Number(match[3])
-  if ((match[2] === '400') !== (rightbar > 0)) throw new Error(`centre minimum out of step: ${frame.style.gridTemplateColumns}`)
-  return [Number(match[1]), rightbar]
+  const rail = Number(match[1])
+  if (rail !== ACTIVITY_RAIL_WIDTH) throw new Error(`rail track out of step: ${frame.style.gridTemplateColumns}`)
+  const rightbar = Number(match[4])
+  if ((match[3] === '400') !== (rightbar > 0)) throw new Error(`centre minimum out of step: ${frame.style.gridTemplateColumns}`)
+  return [Number(match[2]), rightbar]
 }
 
 function handleFor(frame: HTMLElement, side: 'sidebar' | 'rightbar'): HTMLElement {
@@ -143,7 +149,7 @@ function drag(handle: Element, fromX: number, toX: number): void {
 
 beforeEach(() => {
   originalTitle = document.title
-  frameWidth = 1920
+  contentWidth = 1920
   selectedSession = 's-test' as SessionId
   selectedSessionTitle = undefined
   workspacesReady = true
@@ -159,7 +165,7 @@ beforeEach(() => {
   })
   vi.stubGlobal('cancelAnimationFrame', (id: number) => { animationFrames.delete(id) })
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(() => ({
-    width: frameWidth, height: 1080, top: 0, left: 0, right: frameWidth, bottom: 1080,
+    width: contentWidth + ACTIVITY_RAIL_WIDTH, height: 1080, top: 0, left: 0, right: contentWidth + ACTIVITY_RAIL_WIDTH, bottom: 1080,
     x: 0, y: 0, toJSON: () => ({}),
   }))
   // jsdom has no pointer capture. Each element retains the actual pointer id,
@@ -186,7 +192,7 @@ afterEach(() => {
 describe('AppFrame', () => {
   it('localizes the product title without a configured build title', () => {
     mountFrame()
-    expect(document.title).toBe('DSH Local Build')
+    expect(document.title).toBe('deepsleep')
   })
 
   it('follows the selected durable Session title', () => {
@@ -217,6 +223,36 @@ describe('AppFrame', () => {
     expect(getByTestId('sidebar-content')).toBeTruthy()
     expect(getByTestId('rightbar-content')).toBeTruthy()
     expect(getByTestId('shell.bottom-content').parentElement?.hasAttribute('data-shell-bottom')).toBe(true)
+    expect(getByTestId('shell.statusbar-content').parentElement?.hasAttribute('data-shell-statusbar')).toBe(true)
+    expect(getByTestId('shell.activitybar-content').parentElement?.hasAttribute('data-shell-activitybar')).toBe(true)
+    // The brand band and the Workspace tab strip above the columns.
+    expect(getByTestId('shell.header-content').parentElement?.hasAttribute('data-shell-header')).toBe(true)
+    expect(getByTestId('shell.workspace.tabs-content').parentElement?.hasAttribute('data-shell-workspace-tabs')).toBe(true)
+    expect(tracks(frame)).toEqual([280, 0])
+  })
+
+  it('swaps the three columns for a selected activity and restores them', () => {
+    const { frame, instance, getByTestId, queryByTestId, slotCalls } = mountFrame()
+    act(() => { instance.actions.selectActivity('plugins') })
+    expect(slotCalls.find(c => c.key === 'shell.activity')).toEqual({
+      key: 'shell.activity', props: {}, options: { entryKey: 'plugins' },
+    })
+    expect(getByTestId('shell.activity-content').getAttribute('data-entry-key')).toBe('plugins')
+    // The workbench columns and their handles are gone, not merely hidden.
+    expect(queryByTestId('main-content')).toBeNull()
+    expect(queryByTestId('sidebar-content')).toBeNull()
+    // The Workspace tab strip belongs to its activity and leaves with the columns.
+    expect(queryByTestId('shell.workspace.tabs-content')).toBeNull()
+    expect(frame.querySelector('[data-shell-workspace-tabs]')).toBeNull()
+    // The brand band stays: it sits outside every activity.
+    expect(queryByTestId('shell.header-content')).toBeTruthy()
+    expect(frame.querySelector('[data-side="sidebar"]')).toBeNull()
+    expect(frame.style.gridTemplateColumns).toBe('48px minmax(0px, 1fr) 0px 0px')
+    // The rail and the status bar stay: they are frame chrome, not activity content.
+    expect(queryByTestId('shell.activitybar-content')).toBeTruthy()
+    expect(queryByTestId('shell.statusbar-content')).toBeTruthy()
+    act(() => { instance.actions.selectActivity('workspace') })
+    expect(getByTestId('main-content').getAttribute('data-entry-key')).toBe('conversation')
     expect(tracks(frame)).toEqual([280, 0])
   })
 
@@ -285,14 +321,14 @@ describe('AppFrame', () => {
       expect(instance.getSnapshot().layoutInfo).toBe(layoutInfo)
       expect(tracks(frame)).toEqual([280, 0])
       expect(selectedSession).toBe(sessionId)
-      expect(document.title).toBe(panelId === null ? 'Session title — DSH Local Build' : 'DSH Local Build')
+      expect(document.title).toBe(panelId === null ? 'Session title — deepsleep' : 'deepsleep')
     }
   })
 })
 
 describe('AppFrame normal width concessions', () => {
   it('measures the frame, not the window, before choosing the first-open preference', () => {
-    frameWidth = 1000
+    contentWidth = 1000
     const { instance, rightOwner } = mountFrame(1920)
     expect(instance.getSnapshot().layoutInfo.viewportWidth).toBe(1000)
     expect(rightOwner()).toEqual({ width: 450, viewportWidth: 1000, canShow: true })
@@ -325,7 +361,7 @@ describe('AppFrame normal width concessions', () => {
   })
 
   it('uses the post-collapse left rail to permit a narrow first opening', () => {
-    frameWidth = 800
+    contentWidth = 800
     const { frame, instance, rightOwner } = mountFrame()
     act(() => { instance.actions.toggleSidebar() })
     expect(tracks(frame)).toEqual([280, 0])
@@ -337,14 +373,14 @@ describe('AppFrame normal width concessions', () => {
   })
 
   it.each([[756, 300, true], [755, 0, false]] as const)('reports eligibility at %ipx', (width, rightbar, canShow) => {
-    frameWidth = width
+    contentWidth = width
     const { instance, rightOwner } = mountFrame()
     act(() => { instance.actions.toggleSidebar() })
     expect(rightOwner()).toEqual({ width: rightbar, viewportWidth: width, canShow })
   })
 
   it('does not anticipate another left collapse after the right panel is already shown', () => {
-    frameWidth = 800
+    contentWidth = 800
     const { instance, rightOwner } = mountFrame()
     act(() => { instance.actions.openRightbar(true, false); instance.actions.toggleSidebar() })
     expect(rightOwner().canShow).toBe(false)
@@ -476,7 +512,7 @@ describe('AppFrame right panel presentation', () => {
     const { frame, instance, rightOwner } = mountFrame()
     act(() => { instance.actions.openRightbar(true, false) })
     expect(tracks(frame)).toEqual([280, 864])
-    expect(handleFor(frame, 'rightbar').style.left).toBe('1056px')
+    expect(handleFor(frame, 'rightbar').style.left).toBe('1104px')
     act(() => { instance.actions.openRightbar(true, true) })
     expect(tracks(frame)).toEqual([280, 864])
     expect(rightOwner().width).toBe(864)
@@ -484,7 +520,7 @@ describe('AppFrame right panel presentation', () => {
     expect(frame.querySelector('[data-side="rightbar"]')).toBeNull()
     act(() => { instance.actions.openRightbar(true, false) })
     expect(tracks(frame)).toEqual([280, 864])
-    expect(handleFor(frame, 'rightbar').style.left).toBe('1056px')
+    expect(handleFor(frame, 'rightbar').style.left).toBe('1104px')
     expect(frame.dataset.rightbarFullscreen).toBeUndefined()
     act(() => { instance.actions.closeRightbar() })
     expect(tracks(frame)).toEqual([280, 0])
@@ -506,7 +542,7 @@ describe('AppFrame right panel presentation', () => {
   })
 
   it('retains fullscreen without a track when normal columns cannot fit', () => {
-    frameWidth = 700
+    contentWidth = 700
     const { frame, instance, rightOwner } = mountFrame()
     act(() => { instance.actions.openRightbar(false, true) })
     expect(tracks(frame)).toEqual([56, 0])
@@ -555,16 +591,16 @@ describe('AppFrame pointer resizing', () => {
     const handle = handleFor(frame, 'rightbar')
     expect(rightOwner().width).toBe(420)
     expect(tracks(frame)[1]).toBe(770)
-    expect(handle.style.left).toBe('680px')
+    expect(handle.style.left).toBe('728px')
     drag(handle, 680, 690)
     expect(instance.getSnapshot().layoutInfo.rightbar).toBe(410)
     expect(rightOwner().width).toBe(410)
     expect(tracks(frame)[1]).toBe(410)
-    expect(handle.style.left).toBe('690px')
+    expect(handle.style.left).toBe('738px')
   })
 
   it('widens to the 70% limit and shrinks to 300px through pointer input', () => {
-    frameWidth = 3000
+    contentWidth = 3000
     const { frame, instance, rightOwner } = mountFrame()
     act(() => { instance.actions.toggleSidebar(); instance.actions.openRightbar(true, false) })
     drag(handleFor(frame, 'rightbar'), 1650, 0)
@@ -645,9 +681,9 @@ describe('AppFrame frame measurement lifecycle', () => {
     const { instance, rightOwner } = mountFrame()
     const observer = observers.at(-1)!
     act(() => {
-      frameWidth = 900
+      contentWidth = 900
       observer.fire()
-      frameWidth = 1200
+      contentWidth = 1200
       observer.fire()
     })
     expect(animationFrames.size).toBe(1)
@@ -668,7 +704,7 @@ describe('AppFrame frame measurement lifecycle', () => {
   it('disconnects the observer and prevents queued or late reports after unmount', () => {
     const { instance, unmount } = mountFrame()
     const observer = observers.at(-1)!
-    frameWidth = 800
+    contentWidth = 800
     act(() => { observer.fire() })
     expect(animationFrames.size).toBe(1)
     unmount()

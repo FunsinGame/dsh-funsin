@@ -101,7 +101,7 @@ function placeRow(row: HTMLElement, top: number): void {
 }
 
 const renderSlotStub: WorkspaceBrowserProps['renderSlot'] = (name: string, owner: object) =>
-  name === 'shell.header.directoryFlow' && (owner as DirectoryFlowOwnerProps).open
+  name === 'shell.workspace.tabs.directoryFlow' && (owner as DirectoryFlowOwnerProps).open
     ? <div data-testid="directory-flow" />
     : null
 

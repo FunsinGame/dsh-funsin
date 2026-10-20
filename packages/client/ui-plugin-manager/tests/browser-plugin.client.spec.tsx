@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { cleanup, render } from '@testing-library/react'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { ILayout, PanelInfo } from '@deepseek-ai/dsh-client-ui-layout/client'
+import type { ActivityInfo, ILayout, PanelInfo } from '@deepseek-ai/dsh-client-ui-layout/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import { allowAllAccess, TestRemote, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
@@ -43,21 +43,27 @@ async function bench() {
       registries: vi.fn(() => Promise.resolve({ ok: true as const, value: { registry: null, fallbackRegistries: [], resolved: null } })),
     },
   })
-  const panelInfo = createSnapshotStore<PanelInfo>({ activePanelId: null })
-  const selectPanel = vi.fn<ILayout['selectPanel']>((activePanelId) => { panelInfo.set({ activePanelId }) })
-  ctx.provide('layout', { panelInfo, selectPanel, beginNavigation: () => new AbortController().signal,
-    toggleSidebar: vi.fn(), openRightbar: vi.fn(), closeRightbar: vi.fn() })
+  const activityInfo = createSnapshotStore<ActivityInfo>({ activeId: 'workspace' })
+  const selectActivity = vi.fn<ILayout['selectActivity']>((activeId) => { activityInfo.set({ activeId }) })
+  ctx.provide('layout', {
+    panelInfo: createSnapshotStore<PanelInfo>({ activePanelId: null }),
+    activityInfo,
+    selectPanel: vi.fn(),
+    selectActivity,
+    beginNavigation: () => new AbortController().signal,
+    toggleSidebar: vi.fn(), openRightbar: vi.fn(), closeRightbar: vi.fn(),
+  })
   await ctx.plugin(settings).await()
-  return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, list, remote, selectPanel, panelInfo }
+  return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, list, remote, selectActivity, activityInfo }
 }
 
 function declare(slots: SlotRegistry): () => void {
   return slots.register({
     name: 'root',
     children: {
-      'main': { kind: 'keyed', scope: 'root' },
+      'shell.activity': { kind: 'keyed', scope: 'root' },
+      'shell.activitybar.items': { kind: 'list', scope: 'root' },
       'shell.overlay': { kind: 'list', scope: 'root' },
-      'sidebar.panellist': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
 }
@@ -67,24 +73,24 @@ describe('ui-plugin-manager browser plugin', () => {
     const b = await bench()
     const removeRoot = declare(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
-    const entry = b.slots.entries('main')[0]!
+    const entry = b.slots.entries('shell.activity')[0]!
     assert(entry.store && 'create' in entry.store)
     const navigation = entry.store.create()
     expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' } })
     b.ctx.pluginNavigation.openBundle('dsh-navigation-test')
-    expect(b.panelInfo.getSnapshot().activePanelId).toBe(PANEL_ID)
+    expect(b.activityInfo.getSnapshot().activeId).toBe(PANEL_ID)
     expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-navigation-test' } })
-    b.selectPanel(null)
+    b.selectActivity('workspace')
     expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' } })
-    b.selectPanel(PANEL_ID)
+    b.selectActivity(PANEL_ID)
     expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' } })
     assert(navigation.actions.setView)
     navigation.actions.setView({ kind: 'more' })
-    b.selectPanel(null)
+    b.selectActivity('workspace')
     expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' } })
     b.ctx.pluginNavigation.openBundle('dsh-navigation-test')
     removeRoot()
-    b.selectPanel(null)
+    b.selectActivity('workspace')
     expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-navigation-test' } })
   })
 
@@ -94,29 +100,29 @@ describe('ui-plugin-manager browser plugin', () => {
     await fiber.await()
     expect(b.slots.entries('shell.overlay')).toHaveLength(0)
     const removeRoot = declare(b.slots)
-    const mainInjected: object = b.slots.entries('main')[0]!.inject!()
+    const mainInjected: object = b.slots.entries('shell.activity')[0]!.inject!()
     const face = mainInjected as PluginManagerFace
     const overlayInjected: object = b.slots.entries('shell.overlay')[0]!.inject!()
     const overlay = overlayInjected as PluginRefreshToastFace
     expect(overlay.hooks.pluginManager).toBe(face.hooks.pluginManager)
     face.ensure()
     await vi.waitFor(() => { expect(face.hooks.pluginManager.getSnapshot().status).toBe('ready') })
-    b.selectPanel(PANEL_ID)
+    b.selectActivity(PANEL_ID)
     b.list.mockRejectedValueOnce(new Error('offline'))
     face.refresh()
-    b.selectPanel(null)
+    b.selectActivity('workspace')
     await vi.waitFor(() => { expect(overlay.hooks.pluginManager.getSnapshot().notice?.kind).toBe('refresh-failed') })
     overlay.dismissNotice()
     expect(face.hooks.pluginManager.getSnapshot().notice).toBeNull()
     removeRoot()
     expect(b.slots.entries('shell.overlay')).toHaveLength(0)
-    expect(b.slots.entries('main')).toHaveLength(0)
+    expect(b.slots.entries('shell.activity')).toHaveLength(0)
     declare(b.slots)
     const remountedInjected: object = b.slots.entries('shell.overlay')[0]!.inject!()
     expect((remountedInjected as PluginRefreshToastFace).hooks.pluginManager).toBe(face.hooks.pluginManager)
     await fiber.dispose()
     expect(b.slots.entries('shell.overlay')).toHaveLength(0)
-    expect(b.slots.entries('main')).toHaveLength(0)
+    expect(b.slots.entries('shell.activity')).toHaveLength(0)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     const reloadedInjected: object = b.slots.entries('shell.overlay')[0]!.inject!()
     expect((reloadedInjected as PluginRefreshToastFace).hooks.pluginManager).not.toBe(face.hooks.pluginManager)
@@ -127,24 +133,24 @@ describe('ui-plugin-manager browser plugin', () => {
     expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.pluginManager', 'remote.pluginInventory', 'remote.pluginRegistryProbe', 'configForms', 'layout'])
   })
 
-  it('registers the sidebar entry and its page, which reads the Host only once rendered and follows Host changes', async () => {
+  it('registers the activity-bar entry and its page, which reads the Host only once rendered and follows Host changes', async () => {
     const b = await bench()
     declare(b.slots)
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
 
     b.ctx.pluginNavigation.openBundle('dsh-navigation-test')
-    expect(b.selectPanel).toHaveBeenCalledWith(PANEL_ID)
-    const entry = b.slots.entries('main')[0]!
+    expect(b.selectActivity).toHaveBeenCalledWith(PANEL_ID)
+    const entry = b.slots.entries('shell.activity')[0]!
     assert(entry.store && 'create' in entry.store)
     expect(entry.store.create().getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-navigation-test' } })
     expect(entry.component).toBe(PluginManagerPage)
     expect(entry.options).toMatchObject({ key: PANEL_ID })
     expect(entry.locale).toBe(NS)
-    // The sidebar entry addresses the page by the same id and speaks the dictionary.
-    const icon = b.slots.entries('sidebar.panellist')[0]!
+    // The rail entry addresses the page by the same id and speaks the dictionary.
+    const icon = b.slots.entries('shell.activitybar.items')[0]!
     expect(icon.component).toBe(PluginsPanelIcon)
-    const unread = () => { throw new Error('The sidebar icon must not read application state') }
+    const unread = () => { throw new Error('The rail glyph must not read application state') }
     const glyph = render(<PluginsPanelIcon size={18} active={false}
       usePanelInfo={unread} useSessions={unread} useSessionStatus={unread} useSessionRetainInfo={unread}
       useWorkspaces={unread} useResource={unread} {...allowAllAccess} />)
@@ -200,9 +206,9 @@ describe('ui-plugin-manager browser plugin', () => {
 
     await fiber.dispose()
     expect(b.ctx.get('pluginNavigation')).toBeUndefined()
-    expect(b.slots.entries('main')).toHaveLength(0)
+    expect(b.slots.entries('shell.activity')).toHaveLength(0)
     expect(b.slots.entries('shell.overlay')).toHaveLength(0)
-    expect(b.slots.entries('sidebar.panellist')).toHaveLength(0)
+    expect(b.slots.entries('shell.activitybar.items')).toHaveLength(0)
     b.remote.emit('plugin-manager/changed', [{ reason: 'install' }])
     await Promise.resolve()
     expect(b.list).toHaveBeenCalledTimes(3)

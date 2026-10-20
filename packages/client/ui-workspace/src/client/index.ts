@@ -1,7 +1,8 @@
 /**
- * Workspace plugin, browser half. Three registrations: WorkspaceTabs fills the
+ * Workspace plugin, browser half. Four registrations: WorkspaceTabs fills the
  * frame's `shell.header` band (the Workspace inventory: switch, reorder,
- * close, add), WorkspaceBrowser fills the sidebar shell's
+ * close, add), WorkspaceStatusItem puts the current Workspace in the frame's
+ * status bar, WorkspaceBrowser fills the sidebar shell's
  * `sidebar.workspaces` hole with the current Workspace's Session list, and
  * WorkspacePicker fills the conversation hero's picker hole
  * (`conversation.hero.workspace` — both hero forms). Each reads real Host
@@ -45,6 +46,7 @@ import {
   type SessionArchiveConfirmInjected, type SessionArchiveConfirmRequest,
   type RenameSessionInjected, type RowToast, type RowToastInjected, type RowToastState, type SessionRenameDialogInjected,
   type SessionIdInjected, type WorkspaceBrowserInjected, type WorkspacePickerInjected, type WorkspaceTabsInjected,
+  type CurrentWorkspaceInjected,
 } from './contract/slots.ts'
 import { createWorkspaceShortcutControls, installWorkspaceShortcuts } from './shortcuts.ts'
 import { UiWorkspaceService } from './navigation.ts'
@@ -60,6 +62,7 @@ import { RowActionToast } from './session-actions/RowActionToast.tsx'
 import { registerToasts } from './toast/register.ts'
 import { SessionIdMenuItem } from './session-actions/SessionId.tsx'
 import { WorkspacePicker } from './WorkspacePicker.tsx'
+import { WorkspaceStatusItem } from './status/WorkspaceStatusItem.tsx'
 import { en, zh, type WorkspaceKey } from './locales.ts'
 
 export type { StartSessionOptions, UiWorkspace } from './navigation.ts'
@@ -150,11 +153,11 @@ export function apply(ctx: Context): void {
 
   // Stable per-surface occupancy sources (the renderer's hook cache keys by
   // source identity): true while the surface's directory-flow hole is filled.
-  const flowSource = (hole: 'shell.header.directoryFlow' | 'conversation.hero.workspace.directoryFlow'): HostObservable<boolean> => ({
+  const flowSource = (hole: 'shell.workspace.tabs.directoryFlow' | 'conversation.hero.workspace.directoryFlow'): HostObservable<boolean> => ({
     getSnapshot: () => ctx.slots.entries(hole).length > 0,
     subscribe: listener => ctx.slots.subscribe(hole, listener),
   })
-  const tabsFlowSource = flowSource('shell.header.directoryFlow')
+  const tabsFlowSource = flowSource('shell.workspace.tabs.directoryFlow')
   const pickerFlowSource = flowSource('conversation.hero.workspace.directoryFlow')
   const openSession: WorkspaceBrowserInjected['open'] = (sessionId) => {
     uiWorkspace.openSession(sessionId)
@@ -320,17 +323,28 @@ export function apply(ctx: Context): void {
     createWorkspace: input => workspaces.create(input),
     hooks: { directoryFlow: pickerFlowSource },
   })
-  // The Workspace inventory lives in the frame's header band: one tab per
-  // registration, the current one selected, closed, reordered, and added there.
-  ctx.slots.inject('shell.header', () => ctx.slots.register(
+  // The Workspace inventory lives at the top of the Workspace activity's page:
+  // one tab per registration, the current one selected, closed, reordered, and
+  // added there. The strip leaves with its activity, so a registered activity
+  // replaces it along with the columns below.
+  ctx.slots.inject('shell.workspace.tabs', () => ctx.slots.register(
     {
-      name: 'shell.header',
-      children: { 'shell.header.directoryFlow': { kind: 'single', scope: 'root' } },
+      name: 'shell.workspace.tabs',
+      children: { 'shell.workspace.tabs.directoryFlow': { kind: 'single', scope: 'root' } },
       inject: tabsInjected,
       locale: NS,
     },
     WorkspaceTabs,
   ))
+  // The status bar shows the same published current-Workspace fact the tab
+  // strip switches, so the two never disagree about which Workspace is open.
+  ctx.slots.inject('shell.statusbar.left', () => ctx.slots.register({
+    name: 'shell.statusbar.left',
+    id: 'workspace',
+    order: 100,
+    locale: NS,
+    inject: (): CurrentWorkspaceInjected => ({ hooks: { currentWorkspace } }),
+  }, WorkspaceStatusItem))
   // Each registration declares its owned children in the same call; slot
   // injection follows both the owner and declaration HMR lifetimes.
   ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register(

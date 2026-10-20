@@ -1,0 +1,83 @@
+/*
+ * Frame brand band: the top of the frame, above the activity rail and every
+ * activity. It keeps the chrome fill so the band reads as the menu bar's left
+ * corner, and draws the divider the old Workspace tab strip drew.
+ */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  min-width: 0;
+  padding: 0 12px;
+  box-sizing: border-box;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+  overflow: hidden;
+}
+
+/* Windows desktop: the brand shares the window caption's first line with the
+   native menus, so it is fixed over that strip instead of taking a band below
+   it. The frame's header row then collapses, and the caption controls and the
+   native menus start after the measured `--dsh-windows-brand-end`. */
+.captionBar {
+  position: fixed;
+  top: 0;
+  left: 12px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 200px;
+  height: var(--dsh-windows-titlebar-height, 40px);
+  overflow: hidden;
+  user-select: none;
+}
+
+.brandIdentity {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  min-width: 0;
+}
+
+.brandMark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brandName {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 24px;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 24px;
+  letter-spacing: 0.04em;
+}
+
+.wordmark {
+  font-size: 18px;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.buildVersion {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 10px;
+  padding: 0 3px;
+  border-radius: 2px;
+  color: var(--dsw-alias-label-primary-inverted);
+  background: var(--dsw-alias-label-primary);
+  font-family: var(--ds-font-family-code);
+  font-size: 6px;
+  font-weight: 500;
+  line-height: 10px;
+}

@@ -27,7 +27,7 @@ vi.mock('../../../../apps/desktop/src/preload-mandatory-overlay.ts', () => ({ in
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); desktopIpc.invoke.mockReset(); desktopIpc.on.mockReset() })
 
-const HOLES = ['conversation.hero.workspace.directoryFlow', 'shell.header.directoryFlow'] as const
+const HOLES = ['conversation.hero.workspace.directoryFlow', 'shell.workspace.tabs.directoryFlow'] as const
 
 async function bench() {
   const ctx = new Context()

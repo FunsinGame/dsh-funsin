@@ -287,10 +287,10 @@ function bench(options: BenchOptions = {}) {
   const requestDraftInitialization = vi.fn<SessionInputResolver['requestDraftInitialization']>(() => 'applied')
   if (options.conversation !== false) ctx.provide('conversation', { input: { requestDraftInitialization } })
   const layout = new LayoutController({
-    selectPanel: vi.fn(), retainMainPanels: vi.fn(),
+    selectPanel: vi.fn(), retainMainPanels: vi.fn(), selectActivity: vi.fn(), retainActivities: vi.fn(),
     setSidebar: vi.fn(), toggleSidebar: vi.fn(), setViewportWidth: vi.fn(),
     setRightbar: vi.fn(), openRightbar: vi.fn(), closeRightbar: vi.fn(),
-  }, () => true, createSnapshotStore({ activePanelId: null }))
+  }, () => true, createSnapshotStore({ activePanelId: null }), () => true, createSnapshotStore({ activeId: 'workspace' }))
   const selectPanel = vi.spyOn(layout, 'selectPanel')
   ctx.provide('layout', layout)
   ctx.effect(() => () => { layout.dispose() })

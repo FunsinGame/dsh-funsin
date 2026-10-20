@@ -7,6 +7,8 @@ function fakePanels(): PanelActions {
   return {
     selectPanel: vi.fn(),
     retainMainPanels: vi.fn(),
+    selectActivity: vi.fn(),
+    retainActivities: vi.fn(),
     setSidebar: vi.fn(),
     toggleSidebar: vi.fn(),
     setViewportWidth: vi.fn(),
@@ -16,15 +18,30 @@ function fakePanels(): PanelActions {
   }
 }
 
+/** Service under test over the given faces and action stubs. */
+function service(
+  panels = fakePanels(),
+  hasMainPanel: (id: MainPanelId) => boolean = () => true,
+  hasActivity: (id: string) => boolean = () => true,
+): LayoutController {
+  return new LayoutController(
+    panels,
+    hasMainPanel,
+    createSnapshotStore({ activePanelId: null }),
+    hasActivity,
+    createSnapshotStore({ activeId: 'workspace' }),
+  )
+}
+
 describe('LayoutController', () => {
   it('forwards right column transitions to the constructor-supplied actions', () => {
     const panels = fakePanels()
-    const service = new LayoutController(panels, () => true, createSnapshotStore({ activePanelId: null }))
+    const controller = service(panels)
 
-    service.openRightbar(true, false)
-    service.openRightbar(true, true)
-    service.openRightbar(false, true)
-    service.closeRightbar()
+    controller.openRightbar(true, false)
+    controller.openRightbar(true, true)
+    controller.openRightbar(false, true)
+    controller.closeRightbar()
 
     expect(panels.openRightbar).toHaveBeenNthCalledWith(1, true, false)
     expect(panels.openRightbar).toHaveBeenNthCalledWith(2, true, true)
@@ -36,9 +53,9 @@ describe('LayoutController', () => {
 
   it('can toggle the sidebar immediately after construction', () => {
     const panels = fakePanels()
-    const service = new LayoutController(panels, () => true, createSnapshotStore({ activePanelId: null }))
+    const controller = service(panels)
 
-    service.toggleSidebar()
+    controller.toggleSidebar()
 
     expect(panels.toggleSidebar).toHaveBeenCalledTimes(1)
     expect(panels.setSidebar).not.toHaveBeenCalled()
@@ -46,11 +63,11 @@ describe('LayoutController', () => {
 
   it('forwards panel selection and returning to the Conversation without changing geometry', () => {
     const panels = fakePanels()
-    const service = new LayoutController(panels, () => true, createSnapshotStore({ activePanelId: null }))
+    const controller = service(panels)
     const panelId = 'panel-a' as MainPanelId
-    service.selectPanel(panelId)
-    service.selectPanel(panelId)
-    service.selectPanel(null)
+    controller.selectPanel(panelId)
+    controller.selectPanel(panelId)
+    controller.selectPanel(null)
     expect(panels.selectPanel).toHaveBeenNthCalledWith(1, panelId)
     expect(panels.selectPanel).toHaveBeenNthCalledWith(2, panelId)
     expect(panels.selectPanel).toHaveBeenNthCalledWith(3, null)
@@ -62,8 +79,8 @@ describe('LayoutController', () => {
   it('keeps separately constructed controllers bound to their own instances', () => {
     const first = fakePanels()
     const second = fakePanels()
-    const firstService = new LayoutController(first, () => true, createSnapshotStore({ activePanelId: null }))
-    const secondService = new LayoutController(second, () => true, createSnapshotStore({ activePanelId: null }))
+    const firstService = service(first)
+    const secondService = service(second)
     firstService.toggleSidebar()
     expect(first.toggleSidebar).toHaveBeenCalledTimes(1)
     expect(second.toggleSidebar).not.toHaveBeenCalled()
@@ -72,34 +89,45 @@ describe('LayoutController', () => {
     expect(second.closeRightbar).toHaveBeenCalledTimes(1)
   })
 
+  it('forwards activity selection and rejects an id the ledger does not offer', () => {
+    const panels = fakePanels()
+    const selectable = new Set(['workspace', 'plugins'])
+    const controller = service(panels, () => true, id => selectable.has(id))
+    controller.selectActivity('plugins')
+    expect(panels.selectActivity).toHaveBeenCalledWith('plugins')
+    selectable.delete('plugins')
+    expect(() => { controller.selectActivity('plugins') }).toThrow('activity "plugins" is not registered')
+    expect(panels.selectActivity).toHaveBeenCalledOnce()
+  })
+
   it('rejects an absent main entry without changing selection or cancelling pending navigation', () => {
     const panels = fakePanels()
     const present = new Set(['panel-a'])
-    const service = new LayoutController(panels, id => present.has(id), createSnapshotStore({ activePanelId: null }))
-    service.selectPanel('panel-a' as MainPanelId)
-    const navigation = service.beginNavigation()
+    const controller = service(panels, id => present.has(id))
+    controller.selectPanel('panel-a' as MainPanelId)
+    const navigation = controller.beginNavigation()
     present.delete('panel-a')
-    expect(() => { service.selectPanel('panel-a' as MainPanelId) }).toThrow('main panel "panel-a" is not registered')
+    expect(() => { controller.selectPanel('panel-a' as MainPanelId) }).toThrow('main panel "panel-a" is not registered')
     expect(panels.selectPanel).toHaveBeenCalledOnce()
     expect(navigation.aborted).toBe(false)
-    service.selectPanel(null)
+    controller.selectPanel(null)
     expect(navigation.aborted).toBe(true)
   })
 
   it('supersedes asynchronous navigation on another request, any valid selection, and disposal', () => {
-    const service = new LayoutController(fakePanels(), () => true, createSnapshotStore({ activePanelId: null }))
-    const first = service.beginNavigation()
-    const second = service.beginNavigation()
+    const controller = service()
+    const first = controller.beginNavigation()
+    const second = controller.beginNavigation()
     expect(first.aborted).toBe(true)
     expect(second.aborted).toBe(false)
-    service.selectPanel('panel-a' as MainPanelId)
+    controller.selectPanel('panel-a' as MainPanelId)
     expect(second.aborted).toBe(true)
-    const repeated = service.beginNavigation()
-    service.selectPanel('panel-a' as MainPanelId)
+    const repeated = controller.beginNavigation()
+    controller.selectPanel('panel-a' as MainPanelId)
     expect(repeated.aborted).toBe(true)
-    const pending = service.beginNavigation()
-    service.dispose()
+    const pending = controller.beginNavigation()
+    controller.dispose()
     expect(pending.aborted).toBe(true)
-    service.dispose()
+    controller.dispose()
   })
 })

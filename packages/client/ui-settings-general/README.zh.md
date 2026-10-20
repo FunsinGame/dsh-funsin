@@ -97,7 +97,7 @@ Web 与桌面端的通用设置底部显示当前发布版本，使用构建注�
 以下页面覆盖设置界面家族与组合模型。
 
 - [ui-settings](../ui-settings/README.zh.md)——本外壳所依赖 slot 类型与 scope 服务所在的领域底座。
-- [ui-sidebar](../ui-sidebar/README.zh.md)——承载 `sidebar.settings` 席位的侧边栏外壳。
+- [ui-sidebar](../ui-sidebar/README.zh.md)——承载 `shell.activitybar.settings` 席位的侧边栏外壳。
 - [ui-settings-models](../ui-settings-models/README.zh.md)——贡献 DeepSeek 引导步骤的功能包。
 - [settings](../../settings/README.zh.md)——持久化用户设置 seam 及其文件提供方。
 - [slot 系统标准](../../../.agents/notes/implemented/architecture/2026-07-22-slot-type-chain-implementation.zh.md)——账本背后的组合模型。

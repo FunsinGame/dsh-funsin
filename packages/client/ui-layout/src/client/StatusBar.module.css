@@ -1,0 +1,39 @@
+/*
+ * Status bar strip. The leading group takes the remaining width and truncates
+ * before the trailing group, which never shrinks: a status value that must stay
+ * readable (a progress or connection state) therefore survives a narrow frame.
+ * Entries inherit the bar's ink, size, and line height and own only their own
+ * markup.
+ */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 22px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-top: 0.5px solid var(--dsw-alias-border-l3);
+  background: var(--dsw-specific-sidebar-fill);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 22px;
+  white-space: nowrap;
+}
+
+.group {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.trailing {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}

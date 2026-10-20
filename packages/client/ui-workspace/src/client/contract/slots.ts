@@ -1,7 +1,7 @@
 /**
  * ui-workspace contracts. Three registrations share this package:
  *
- * - WorkspaceTabs fills the frame's `shell.header` band — the horizontal
+ * - WorkspaceTabs fills the top band of the Workspace activity's page — the horizontal
  *   Workspace tab strip that switches the current Workspace, reorders the
  *   registry by drag, closes a Workspace registration from its context menu,
  *   and adds one through the composed directory flow.
@@ -119,7 +119,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     /** Directory-flow hole under the conversation empty-state picker (declared by the WorkspacePicker entry). */
     'conversation.hero.workspace.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
     /** Directory-flow hole under the Workspace tab strip (declared by the WorkspaceTabs entry). */
-    'shell.header.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
+    'shell.workspace.tabs.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
     /**
      * Leading decoration of one Session row, in the 16px cell before the title
      * that the row's own state dot otherwise occupies. A higher-priority state
@@ -194,7 +194,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 /** The directory-flow holes; a flow package's client half registers its one component into every hole. */
 export type DirectoryFlowSlotName =
   | 'conversation.hero.workspace.directoryFlow'
-  | 'shell.header.directoryFlow'
+  | 'shell.workspace.tabs.directoryFlow'
 
 /**
  * Directory-picking share both trigger surfaces consume. Occupancy rides the
@@ -271,10 +271,10 @@ export type WorkspaceTabsInjected = DirectoryPickingInjected & CurrentWorkspaceI
   notify: (toast: RowToast) => void
 }
 
-/** Props of the `shell.header` tab-strip entry: owner share + child flow hole + injected actions + the locale seat. */
+/** Props of the `shell.workspace.tabs` tab-strip entry: owner share + child flow hole + injected actions + the locale seat. */
 export type WorkspaceTabsProps =
-  PropsRuntime<'shell.header'>
-  & PropsRenderSlots<'shell.header.directoryFlow'>
+  PropsRuntime<'shell.workspace.tabs'>
+  & PropsRenderSlots<'shell.workspace.tabs.directoryFlow'>
   & Omit<WorkspaceTabsInjected, 'hooks'>
   & PropsHooks<WorkspaceTabsInjected['hooks']>
   & PropsLocale<'workspace'>

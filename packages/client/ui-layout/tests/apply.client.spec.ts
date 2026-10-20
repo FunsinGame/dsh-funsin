@@ -12,6 +12,7 @@ import { apply as themeApply, inject as themeInject, ThemeRuntime } from '@deeps
 import { apply, inject, LayoutController } from '@deepseek-ai/dsh-client-ui-layout/client'
 import { apply as nodeApply } from '@deepseek-ai/dsh-client-ui-layout'
 import type { MainPanelId } from '../src/client/service.ts'
+import type { ActivityBarInjected } from '../src/client/contract.ts'
 import type { createLayoutStore } from '../src/client/stores.ts'
 
 const owners = new Set<Fiber>()
@@ -88,9 +89,56 @@ describe('ui-layout client apply', () => {
     expect(slots.spec('sidebar')).toEqual({ kind: 'single', scope: 'root' })
     expect(slots.spec('main')).toEqual({ kind: 'keyed', scope: 'root' })
     expect(slots.spec('rightbar')).toEqual({ kind: 'single', scope: 'root' })
+    expect(slots.spec('shell.activitybar')).toEqual({ kind: 'single', scope: 'root' })
+    expect(slots.spec('shell.activity')).toEqual({ kind: 'keyed', scope: 'root' })
+    expect(slots.spec('shell.header')).toEqual({ kind: 'single', scope: 'root' })
+    expect(slots.spec('shell.workspace.tabs')).toEqual({ kind: 'single', scope: 'root' })
     expect(slots.spec('shell.bottom')).toEqual({ kind: 'single', scope: 'root' })
+    expect(slots.spec('shell.statusbar')).toEqual({ kind: 'single', scope: 'root' })
     expect(slots.spec('shell.overlay')).toEqual({ kind: 'list', scope: 'root' })
     expect(slots.spec('shell.leading')).toEqual({ kind: 'single', scope: 'root' })
+    // The frame's own chrome seats are occupied the way a plugin occupies them.
+    expect(slots.entries('shell.activitybar')).toHaveLength(1)
+    expect(slots.entries('shell.statusbar')).toHaveLength(1)
+    expect(slots.spec('shell.activitybar.items')).toEqual({ kind: 'list', scope: 'root' })
+    // The rail foot hosts the settings shell; the brand band hosts ui-sidebar.
+    expect(slots.spec('shell.activitybar.settings')).toEqual({ kind: 'single', scope: 'root' })
+    expect(slots.spec('shell.statusbar.left')).toEqual({ kind: 'list', scope: 'root' })
+    expect(slots.spec('shell.statusbar.right')).toEqual({ kind: 'list', scope: 'root' })
+  })
+
+  it('drives the activity rail from the entry ledger and validates the selected view', async () => {
+    const { ctx, slots } = await bench()
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    const bar = slots.entries('shell.activitybar')[0]!
+    const face = bar.inject!() as ActivityBarInjected
+    const instance = (bar.store as ReturnType<typeof createLayoutStore>).create()
+    const activities = face.hooks.activities
+    expect(activities.getSnapshot()).toEqual([])
+    const disposeItem = slots.register({
+      name: 'shell.activitybar.items', id: 'plugins', order: 200, label: () => 'Plugins',
+    }, () => null)
+    await vi.waitFor(() => {
+      expect(activities.getSnapshot()).toEqual([{ id: 'plugins', order: 200, label: 'Plugins' }])
+    })
+    // A rail entry without a `shell.activity` view fails at selection and
+    // leaves the frame on its own composition.
+    expect(() => { face.select('plugins') }).toThrow('layout.selectActivity: activity "plugins" is not registered')
+    expect(instance.getSnapshot().activityInfo.activeId).toBe('workspace')
+    const disposeView = slots.register({ name: 'shell.activity', key: 'plugins' }, () => null)
+    face.select('plugins')
+    expect(instance.getSnapshot().activityInfo.activeId).toBe('plugins')
+    // A sync that projects the same ledger keeps the published snapshot.
+    const projected = activities.getSnapshot()
+    ;(ctx.get('locale') as LocaleRuntime).setLocale('zh')
+    await vi.waitFor(() => { expect(activities.getSnapshot()).toBe(projected) })
+    disposeItem()
+    await vi.waitFor(() => { expect(activities.getSnapshot()).toEqual([]) })
+    // The selected entry is gone: the frame returns to its own composition.
+    expect(instance.getSnapshot().activityInfo.activeId).toBe('workspace')
+    disposeView()
+    await fiber.dispose()
   })
 
   it('shares a pre-created instance between service actions, root rendering, and panelInfo', async () => {
@@ -161,7 +209,13 @@ describe('ui-layout client apply', () => {
     expect(slots.spec('sidebar')).toBeUndefined()
     expect(slots.spec('main')).toBeUndefined()
     expect(slots.spec('rightbar')).toBeUndefined()
+    expect(slots.spec('shell.activitybar')).toBeUndefined()
+    expect(slots.spec('shell.activitybar.items')).toBeUndefined()
+    expect(slots.spec('shell.activity')).toBeUndefined()
     expect(slots.spec('shell.bottom')).toBeUndefined()
+    expect(slots.spec('shell.statusbar')).toBeUndefined()
+    expect(slots.spec('shell.statusbar.left')).toBeUndefined()
+    expect(slots.spec('shell.statusbar.right')).toBeUndefined()
     expect(slots.spec('shell.overlay')).toBeUndefined()
     expect(slots.spec('shell.leading')).toBeUndefined()
     expect(host.root.getSnapshot().hooks.panelInfo).toBeUndefined()

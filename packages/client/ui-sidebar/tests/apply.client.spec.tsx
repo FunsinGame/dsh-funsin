@@ -9,6 +9,7 @@ import { apply, inject } from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { SidebarRootInjected } from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import { HeaderLeadingControls } from '../src/client/HeaderLeadingControls.tsx'
+import { FrameBrand } from '../src/client/FrameBrand.tsx'
 import { apply as hostApply } from '../src/index.ts'
 
 const owners = new Set<Fiber>()
@@ -45,6 +46,7 @@ async function bench(declare = true) {
         'sidebar': { kind: 'single', scope: 'root' },
         'main': { kind: 'keyed', scope: 'root' },
         'shell.leading': { kind: 'single', scope: 'root' },
+        'shell.header': { kind: 'single', scope: 'root' },
       } },
       SidebarFrame,
     )
@@ -65,8 +67,11 @@ describe('ui-sidebar apply', () => {
     const b = await bench()
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     expect(b.slots.entries('sidebar')).toHaveLength(1)
-    expect(b.slots.spec('sidebar.brand.mark')).toEqual({ kind: 'single', scope: 'root' })
-    expect(b.slots.spec('sidebar.brand.name')).toEqual({ kind: 'single', scope: 'root' })
+    // The wordmark's own seat: the frame brand band, right in every activity.
+    expect(b.slots.entries('shell.header')).toHaveLength(1)
+    expect(b.slots.entries('shell.header')[0]!.component).toBe(FrameBrand)
+    expect(b.slots.spec('shell.header.brand.mark')).toEqual({ kind: 'single', scope: 'root' })
+    expect(b.slots.spec('shell.header.brand.name')).toEqual({ kind: 'single', scope: 'root' })
     expect(b.slots.spec('sidebar.workspaces')).toEqual({ kind: 'single', scope: 'root' })
     expect(b.slots.spec('sidebar.settings')).toEqual({ kind: 'single', scope: 'root' })
     expect(b.slots.spec('sidebar.footer.action')).toEqual({ kind: 'list', scope: 'root' })
@@ -148,8 +153,8 @@ describe('ui-sidebar apply', () => {
     await fiber.dispose()
     expect(b.slots.entries('sidebar')).toHaveLength(0)
     expect(b.slots.entries('shell.leading')).toHaveLength(0)
-    expect(b.slots.spec('sidebar.brand.mark')).toBeUndefined()
-    expect(b.slots.spec('sidebar.brand.name')).toBeUndefined()
+    expect(b.slots.spec('shell.header.brand.mark')).toBeUndefined()
+    expect(b.slots.spec('shell.header.brand.name')).toBeUndefined()
     expect(b.slots.spec('sidebar.workspaces')).toBeUndefined()
     expect(b.slots.spec('sidebar.footer.action')).toBeUndefined()
     expect(b.slots.spec('sidebar.panellist')).toBeUndefined()

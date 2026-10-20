@@ -89,7 +89,7 @@ The package injects the Client `remoteAccess` service and provides the root stan
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The package is one composition: all three target slots (`shell.header`, `sidebar.workspaces`, `conversation.hero.workspace`) are declared by other plugins, so `apply` uses `slots.inject()` to register for each declaration lifetime and re-register after a declaring slot is restored.
+The package is one composition: all four target slots (`shell.workspace.tabs`, `shell.statusbar.left`, `sidebar.workspaces`, `conversation.hero.workspace`) are declared by other plugins, so `apply` uses `slots.inject()` to register for each declaration lifetime and re-register after a declaring slot is restored. The status-bar entry renders the current Workspace's name from the same published `currentWorkspace` source the tab strip switches, so both surfaces name one Workspace and switching a tab updates the bar without any bar-level state.
 
 The browser entry also declares two root-scoped `list` child seats on each Session row: `sidebar.session.row.leading`, rendered only while that row's primary status is idle and left blank on an archived row, and `sidebar.session.row.hover`, mounted only while that row's hover card is open. Both take the row's Session identity and nothing else, so an occupant reads its own data by that id; a Session-scoped seat would force a Session binding, which would activate and retain every listed Session.
 
@@ -97,7 +97,7 @@ Client callers can pass `prompt` and `clearPreviousDraft` in the second argument
 
 ### The directory-flow hole
 
-Each registration declares a **directory-flow child hole** (`single` kind: `conversation.hero.workspace.directoryFlow` / `shell.header.directoryFlow`) that the composed picker package's client half fills with its picking interaction — the `-native` backend's renderless OS-chooser driver, an in-app browsing dialog under a `-browse` composition. The strip's **Add workspace** control renders only while its own hole is occupied; an empty hole means the composition has no picking affordance. This package owns the trigger and the adoption: the occupant reports one picked path per open through the hole's owner conversation (`open`/`busy`/`onPicked`/`onCancel`/`onError`), and the owner adopts it through the object layer, selecting the committed Workspace only after its list projection has refreshed.
+Each registration declares a **directory-flow child hole** (`single` kind: `conversation.hero.workspace.directoryFlow` / `shell.workspace.tabs.directoryFlow`) that the composed picker package's client half fills with its picking interaction — the `-native` backend's renderless OS-chooser driver, an in-app browsing dialog under a `-browse` composition. The strip's **Add workspace** control renders only while its own hole is occupied; an empty hole means the composition has no picking affordance. This package owns the trigger and the adoption: the occupant reports one picked path per open through the hole's owner conversation (`open`/`busy`/`onPicked`/`onCancel`/`onError`), and the owner adopts it through the object layer, selecting the committed Workspace only after its list projection has refreshed.
 
 ### Session row actions
 

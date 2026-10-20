@@ -74,7 +74,7 @@ describe('assembled shortcut command owners', () => {
     })
     const client = await start()
     const shortcuts = client.ctx.shortcuts
-    const settings = (client.ctx.slots.entries('sidebar.settings')[0]!.store as ReturnType<typeof createSettingsShellStore>).create()
+    const settings = (client.ctx.slots.entries('shell.activitybar.settings')[0]!.store as ReturnType<typeof createSettingsShellStore>).create()
     const reference = (client.ctx.slots.entries('shell.overlay').find(entry => entry.options.id === 'shortcuts')!.store as ReturnType<typeof createShortcutsStore>).create()
     const layout = (client.ctx.slots.entries('root')[0]!.store as ReturnType<typeof createLayoutStore>).create()
     function Dialogs() {

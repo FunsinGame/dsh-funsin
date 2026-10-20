@@ -22,7 +22,7 @@ import { SettingsDocumentAction } from '../src/client/SettingsDocumentAction.tsx
 import type { SettingsDocumentActionInjected } from '../src/client/SettingsDocumentAction.tsx'
 
 const SELF = '@deepseek-ai/dsh-client-ui-settings-general'
-const SIDEBAR = '@deepseek-ai/dsh-client-ui-sidebar'
+const LAYOUT = '@deepseek-ai/dsh-client-ui-layout'
 const it = createClientTest({ roster: webApp })
 /** The whole roster's first boot pays the cold module transform of every plugin package. */
 const COLD_BOOT_TIMEOUT_MS = 60_000
@@ -246,7 +246,7 @@ describe('ui-settings-general apply', () => {
   it('re-registers after a Loader rebuild of the declaring chain (stale disposers must not block)', async ({ mock, start }) => {
     const { c, settings } = await client(mock, start)
     const before = SEATS.map(([name]) => ownEntries(c, name)[0])
-    await c.reload(SIDEBAR)
+    await c.reload(LAYOUT)
     await c.flush()
     expectSeated(c)
     SEATS.forEach(([name], index) => {

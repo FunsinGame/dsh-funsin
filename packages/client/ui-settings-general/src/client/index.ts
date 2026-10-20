@@ -176,7 +176,7 @@ export function apply(ctx: ClientContext): void {
       },
     },
   })
-  ctx.slots.inject('sidebar.settings', () => {
+  ctx.slots.inject('shell.activitybar.settings', () => {
     const shellHandle = createSettingsShellStore()
     const shellInstance = shellHandle.create()
     const shellStore: typeof shellHandle = { ...shellHandle, create: () => shellInstance }
@@ -200,7 +200,7 @@ export function apply(ctx: ClientContext): void {
     })
 
     const disposeSlot = ctx.slots.register({
-      name: 'sidebar.settings',
+      name: 'shell.activitybar.settings',
       locale: NS,
       store: shellStore,
       children: {

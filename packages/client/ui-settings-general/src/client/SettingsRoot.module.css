@@ -8,9 +8,14 @@
   margin: 4px -2px;
 }
 
+/* The rail seat stacks: the account launcher above, the settings trigger at
+   the very bottom of the activity rail. */
 .triggerRow.railRow {
-  width: 36px;
-  margin: 8px 0 10px;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: auto;
+  margin: 0;
 }
 
 .trigger {

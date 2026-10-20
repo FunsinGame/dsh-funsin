@@ -381,11 +381,16 @@ describe('web e2e: macOS window drag coverage', () => {
       })
 
       const regions = await collectedRegions(page, INTERACTIVE_SELECTOR)
-      // The row starts at the window's top edge: a page inset above it would be a strip
-      // no drag region covers, which is the dead band at the very top of this page.
-      expect(rect.y, 'the page head starts at the window’s top edge').toBeLessThanOrEqual(0.5)
-      // The page head owns its run, clearance included: that is the entry page's
-      // window strip, with no frame band behind it.
+      const brand = await rectOf(page, '[data-frame-brand]')
+      // The frame's brand band heads the window and drags, so the strip above the
+      // page head belongs to a drag region; the page head starts just below it.
+      expect(brand.height, 'the brand band reserves the window strip').toBeGreaterThan(0)
+      expect(
+        isDraggableAt(regions, brand.x + brand.width / 2, brand.y + brand.height / 2),
+        'the frame brand band',
+      ).toBe(true)
+      expect(rect.y - (brand.y + brand.height), 'the page head starts below the brand band')
+        .toBeCloseTo(0, 0)
       expect(
         isDraggableAt(regions, rect.x + 40, rect.y + 8),
         'the plugin manager page head',
@@ -433,11 +438,17 @@ describe('web e2e: macOS window drag coverage', () => {
       if (geometry.head === null) throw new Error('the detail view rendered no head row')
       const { detail: detailRect, head: headRect, viewport } = geometry
       const regions = await collectedRegions(page, INTERACTIVE_SELECTOR)
+      const brand = await rectOf(page, '[data-frame-brand]')
 
       // The head's top inset is the window clearance above the crumb: blank, so
-      // it drags like the entry page's head. The row also starts at the window's top
-      // edge, or the strip above it belongs to no drag region.
-      expect(headRect.y, 'the detail head row starts at the window’s top edge').toBeLessThanOrEqual(0.5)
+      // it drags like the entry page's head. The frame's brand band heads the
+      // window above it, and it drags as well.
+      expect(
+        isDraggableAt(regions, brand.x + brand.width / 2, brand.y + brand.height / 2),
+        'the frame brand band',
+      ).toBe(true)
+      expect(headRect.y - (brand.y + brand.height), 'the detail head row starts below the brand band')
+        .toBeCloseTo(0, 0)
       expect(
         isDraggableAt(regions, headRect.x + headRect.width / 2, headRect.y + 4),
         'the detail head row’s top inset',

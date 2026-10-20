@@ -21,6 +21,12 @@ export interface PanelInfo {
   readonly activePanelId: MainPanelId | null
 }
 
+/** Root-scoped activity selection exposed to activity-aware components. */
+export interface ActivityInfo {
+  /** Selected activity-bar entry id; the built-in `workspace` renders the frame's own columns. */
+  readonly activeId: string
+}
+
 /** The layout store's bound action set (framework-baked, draft params peeled). */
 export type PanelActions = BoundActions<ReturnType<typeof createLayoutStore>>
 
@@ -28,12 +34,22 @@ export type PanelActions = BoundActions<ReturnType<typeof createLayoutStore>>
 export interface ILayout {
   /** Selected central panel from the same root store used by `usePanelInfo`. */
   readonly panelInfo: HostObservable<PanelInfo>
+  /** Selected activity from the same root store the activity bar renders. */
+  readonly activityInfo: HostObservable<ActivityInfo>
   /**
    * Select a global central panel without changing the current Session.
    * @param panelId - registered main key, or null to show the Conversation.
    * @throws if the selected main key is not registered; preserves the current selection.
    */
   selectPanel(panelId: MainPanelId | null): void
+  /**
+   * Select an activity registered in the activity rail, leaving any global
+   * panel selection intact for the return to the Workspace activity.
+   * @param activityId - the built-in `workspace` activity, or a rail entry id
+   *   that also registers a `shell.activity` view.
+   * @throws if the id names no selectable activity; preserves the current selection.
+   */
+  selectActivity(activityId: string): void
   /**
    * Start an asynchronous navigation, superseding any earlier pending navigation.
    * @returns a signal aborted by the next navigation or layout disposal; check it before committing UI state.
@@ -61,11 +77,15 @@ export class LayoutController implements ILayout {
    * @param panels - actions of the instance shared with the root entry.
    * @param hasMainPanel - checks the live main-slot registry for a panel id.
    * @param panelInfo - root store's shared central-panel selection source.
+   * @param hasActivity - checks the live activity ledger for a selectable id.
+   * @param activityInfo - root store's shared activity selection source.
    */
   constructor(
     private readonly panels: PanelActions,
     private readonly hasMainPanel: (id: MainPanelId) => boolean,
     readonly panelInfo: HostObservable<PanelInfo>,
+    private readonly hasActivity: (id: string) => boolean,
+    readonly activityInfo: HostObservable<ActivityInfo>,
   ) {}
 
   /** Select a global panel or return to the Conversation. */
@@ -75,6 +95,14 @@ export class LayoutController implements ILayout {
     }
     this.navigation.abort()
     this.panels.selectPanel(panelId)
+  }
+
+  /** Select an activity registered in the rail. */
+  selectActivity(activityId: string): void {
+    if (!this.hasActivity(activityId)) {
+      throw new Error(`layout.selectActivity: activity "${activityId}" is not registered`)
+    }
+    this.panels.selectActivity(activityId)
   }
 
   /** @returns the new pending navigation's cancellation signal. */

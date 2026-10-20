@@ -33,7 +33,7 @@ it('opens bottom DevTools after the Developer Tools bundle is enabled on an alre
   await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
   await page.evaluate(() => { Reflect.set(window, '__inspectorLateEnableMarker', 'same-document') })
 
-  await page.getByRole('navigation', { name: 'Global panels' }).getByRole('button', { name: 'Plugins', exact: true }).click()
+  await page.getByRole('navigation', { name: 'Activity bar' }).getByRole('button', { name: 'Plugins', exact: true }).click()
   const plugins = page.locator('[data-plugin-panel]')
   const toggle = plugins.getByRole('switch', { name: 'Enable Developer Tools', exact: true })
   await toggle.waitFor()

@@ -4,14 +4,16 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const css = readFileSync(fileURLToPath(new URL('../src/client/SidebarRoot.module.css', import.meta.url)), 'utf8')
+const brandCss = readFileSync(fileURLToPath(new URL('../src/client/FrameBrand.module.css', import.meta.url)), 'utf8')
 
 /**
  * Declarations of one exact selector, keyed by property.
  * @param selector - exact selector text.
+ * @param sheet - stylesheet text to search, the sidebar sheet by default.
  * @returns the normalized declarations, or undefined when absent.
  */
-function declarations(selector: string): Map<string, string> | undefined {
-  const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, ' ')
+function declarations(selector: string, sheet = css): Map<string, string> | undefined {
+  const withoutComments = sheet.replace(/\/\*[\s\S]*?\*\//g, ' ')
   for (const [, selectorList = '', body = ''] of withoutComments.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     if (!selectorList.split(',').map(value => value.trim()).includes(selector)) continue
     const found = new Map<string, string>()
@@ -65,11 +67,11 @@ describe('SidebarRoot.module.css', () => {
   })
 
   it('keeps the slotted brand row at the full artwork height', () => {
-    expect(declarations('.brandIdentity')?.get('height')).toBe('24px')
-    expect(declarations('.brandName')?.get('height')).toBe('24px')
-    expect(declarations('.brandName')?.get('line-height')).toBe('24px')
-    expect(declarations('.brandName')?.get('font-size')).toBe('18px')
-    expect(declarations('.fallbackBrandName')?.get('font-size')).toBe('17px')
-    expect(declarations('.fallbackBrandName')?.get('white-space')).toBe('nowrap')
+    expect(declarations('.brandIdentity', brandCss)?.get('height')).toBe('24px')
+    expect(declarations('.brandName', brandCss)?.get('height')).toBe('24px')
+    expect(declarations('.brandName', brandCss)?.get('line-height')).toBe('24px')
+    expect(declarations('.brandName', brandCss)?.get('font-size')).toBe('18px')
+    expect(declarations('.wordmark', brandCss)?.get('font-size')).toBe('18px')
+    expect(declarations('.wordmark', brandCss)?.get('white-space')).toBe('nowrap')
   })
 })

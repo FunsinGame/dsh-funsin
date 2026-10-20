@@ -10,6 +10,12 @@ import {
 } from './columns.ts'
 
 /**
+ * Reserved activity id of the frame's own three-column composition. The frame
+ * renders that composition itself, so no rail entry may claim it.
+ */
+export const WORKSPACE_ACTIVITY = 'workspace'
+
+/**
  * Transient layout preferences. Responsive concessions never rewrite widths;
  * the right panel's expanded state belongs to its occupant.
  */
@@ -18,12 +24,16 @@ type LayoutState = {
     /** Null selects the Conversation; global panels keep the current Session intact. */
     activePanelId: MainPanelId | null
   }
+  activityInfo: {
+    /** Selected activity-bar entry: `workspace` or a registered `shell.activity` key. */
+    activeId: string
+  }
   layoutInfo: LayoutInfo
 }
 
 type LayoutInfo = {
   sidebar: number
-  /** Last positive frame measurement; window width bootstraps the first render. */
+  /** Last positive frame measurement **right of the activity bar**; window width bootstraps the first render. */
   viewportWidth: number
   narrowExpanded: boolean
   /**
@@ -58,6 +68,8 @@ type LayoutInfo = {
 type LayoutActions = {
   selectPanel: (draft: LayoutState, panelId: MainPanelId | null) => void
   retainMainPanels: (draft: LayoutState, panelIds: readonly string[]) => void
+  selectActivity: (draft: LayoutState, activityId: string) => void
+  retainActivities: (draft: LayoutState, activityIds: readonly string[]) => void
   setSidebar: (draft: LayoutState, px: number) => void
   toggleSidebar: (draft: LayoutState) => void
   setViewportWidth: (draft: LayoutState, width: number) => void
@@ -79,6 +91,7 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
   const handle = defineStore({
     init: (): LayoutState => ({
       panelInfo: { activePanelId: null },
+      activityInfo: { activeId: WORKSPACE_ACTIVITY },
       layoutInfo: {
         sidebar: SIDEBAR_DEFAULT,
         viewportWidth: window.innerWidth,
@@ -98,6 +111,14 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
         if (d.panelInfo.activePanelId !== null && !panelIds.includes(d.panelInfo.activePanelId)) {
           d.panelInfo.activePanelId = null
         }
+      },
+      selectActivity: (d, activityId: string) => {
+        d.activityInfo.activeId = activityId
+      },
+      // A selected activity whose entry was withdrawn falls back to the frame's
+      // own composition instead of rendering an empty content area.
+      retainActivities: (d, activityIds: readonly string[]) => {
+        if (!activityIds.includes(d.activityInfo.activeId)) d.activityInfo.activeId = WORKSPACE_ACTIVITY
       },
       setSidebar: (d, px: number) => {
         d.layoutInfo.rightbarInstant = false

@@ -54,7 +54,7 @@ function placeTab(tab: HTMLElement, left: number): void {
 }
 
 const renderSlotStub: WorkspaceTabsProps['renderSlot'] = (name: string, owner: object) =>
-  name === 'shell.header.directoryFlow' && (owner as DirectoryFlowOwnerProps).open
+  name === 'shell.workspace.tabs.directoryFlow' && (owner as DirectoryFlowOwnerProps).open
     ? <div data-testid="directory-flow" />
     : null
 
@@ -264,7 +264,7 @@ describe('WorkspaceTabs', () => {
     const createWorkspace = vi.fn(async () => workspace('picked'))
     const pickStub: WorkspaceTabsProps['renderSlot'] = (name: string, owner: object) => {
       const flow = owner as DirectoryFlowOwnerProps
-      return name === 'shell.header.directoryFlow' && flow.open
+      return name === 'shell.workspace.tabs.directoryFlow' && flow.open
         ? <button type="button" onClick={() => { flow.onPicked('/projects/picked') }}>pick</button>
         : null
     }

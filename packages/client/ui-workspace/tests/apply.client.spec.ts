@@ -177,7 +177,7 @@ async function bench() {
   }
 }
 
-type HoleName = 'sidebar.workspaces' | 'conversation.hero.workspace' | 'conversation.empty.workspace' | 'shell.overlay' | 'shell.header'
+type HoleName = 'sidebar.workspaces' | 'conversation.hero.workspace' | 'conversation.empty.workspace' | 'shell.overlay' | 'shell.workspace.tabs'
 
 const MENU_ITEM = 'sidebar.workspaces.session.menu.item'
 const ROW_ACTION = 'sidebar.workspaces.session.row.action'
@@ -808,7 +808,7 @@ describe('ui-workspace apply', () => {
 
   it('routes browser, tab strip, and picker actions to the services', async () => {
     const b = await bench()
-    declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace', 'shell.header', 'shell.overlay')
+    declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace', 'shell.workspace.tabs', 'shell.overlay')
     await b.ctx.plugin({ inject: [...inject], apply }).await()
 
     const browser = faceOf(b.slots.entries('sidebar.workspaces')[0]!) as WorkspaceBrowserInjected
@@ -824,7 +824,7 @@ describe('ui-workspace apply', () => {
     await browser.renameWorkspace('ws' as never, 'renamed')
     expect(b.rename).toHaveBeenCalledWith('ws', 'renamed')
 
-    const tabs = faceOf(b.slots.entries('shell.header')[0]!) as WorkspaceTabsInjected
+    const tabs = faceOf(b.slots.entries('shell.workspace.tabs')[0]!) as WorkspaceTabsInjected
     await tabs.reorderWorkspace('ws' as never, 'anchor' as never)
     expect(b.insertBefore).toHaveBeenCalledWith('ws', 'anchor')
     await tabs.closeWorkspace('ws' as never)
@@ -861,20 +861,20 @@ describe('ui-workspace apply', () => {
 
   it('declares the tab strip flow hole and reports its occupancy', async () => {
     const b = await bench()
-    declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace', 'shell.header')
+    declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace', 'shell.workspace.tabs')
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     // Registration declared the child holes (declaration = render authorization).
-    expect(b.slots.spec('shell.header.directoryFlow')).toMatchObject({ kind: 'single' })
+    expect(b.slots.spec('shell.workspace.tabs.directoryFlow')).toMatchObject({ kind: 'single' })
     expect(b.slots.spec('conversation.hero.workspace.directoryFlow')).toMatchObject({ kind: 'single' })
 
-    const tabs = faceOf(b.slots.entries('shell.header')[0]!) as WorkspaceTabsInjected
+    const tabs = faceOf(b.slots.entries('shell.workspace.tabs')[0]!) as WorkspaceTabsInjected
     const picker = faceOf(b.slots.entries('conversation.hero.workspace')[0]!) as WorkspacePickerInjected
     expect(tabs.hooks.directoryFlow.getSnapshot()).toBe(false)
     expect(picker.hooks.directoryFlow.getSnapshot()).toBe(false)
     // A flow occupant flips exactly its own surface, and the source notifies.
     const notified = vi.fn()
     const unsubscribe = tabs.hooks.directoryFlow.subscribe(notified)
-    const dispose = b.slots.register({ name: 'shell.header.directoryFlow' } as never, () => null)
+    const dispose = b.slots.register({ name: 'shell.workspace.tabs.directoryFlow' } as never, () => null)
     expect(tabs.hooks.directoryFlow.getSnapshot()).toBe(true)
     expect(picker.hooks.directoryFlow.getSnapshot()).toBe(false)
     await Promise.resolve()

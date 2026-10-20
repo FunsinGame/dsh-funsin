@@ -1,4 +1,4 @@
-// Web e2e scenario: the plugin manager page behind the sidebar's Plugins entry over a
+// Web e2e scenario: the plugin manager page behind the activity bar's Plugins entry over a
 // managed scaffold profile: installed bundles, their rows, and bundle enablement. Zero
 // model calls: everything is client state, seeded Session state, profile files, and the settings
 // document, so there is no fixture and a stray stream would fail loud on the open llm seam.
@@ -56,7 +56,7 @@ describe('web e2e: plugin manager', () => {
     await scaffold?.close()
   })
 
-  /** Close any open settings dialog, so the sidebar and the main column are clickable. */
+  /** Close any open settings dialog, so the activity bar and the content area are clickable. */
   async function closeSettings() {
     if (await page.getByRole('dialog', { name: '设置' }).count() > 0) {
       await page.keyboard.press('Escape')
@@ -81,10 +81,10 @@ describe('web e2e: plugin manager', () => {
     await expect.poll(() => dialog.count()).toBe(0)
   }
 
-  /** Select the sidebar's Plugins entry and wait for the management page in the main column. */
+  /** Select the activity bar's Plugins entry and wait for the management page in the content area. */
   async function openPluginsPanel() {
     await closeSettings()
-    await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
+    await page.getByRole('navigation', { name: '功能入口' }).getByRole('button', { name: '插件', exact: true }).click()
     const panel = page.locator('[data-plugin-panel]')
     await panel.waitFor({ timeout: 10_000 })
     while (await panel.getByRole('button', { name: /^返回/ }).count() > 0) {
@@ -253,7 +253,7 @@ describe('web e2e: plugin manager', () => {
         const consoleWatch = watchConsole(probe)
         await probe.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
         await probe.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-        await probe.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
+        await probe.getByRole('navigation', { name: '功能入口' }).getByRole('button', { name: '插件', exact: true }).click()
         await expect.poll(() => spy.mock.calls.length, { timeout: 10_000 }).toBeGreaterThan(0)
         const panel = probe.locator('[data-plugin-panel]')
         const skeleton = panel.locator('[data-plugin-loading]')
@@ -372,7 +372,7 @@ describe('web e2e: plugin manager', () => {
       onTestFailed(() => saveFailureShot(probe, 'web-e2e-plugin-manager-refresh'))
       await probe.clock.install()
       await probe.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-      await probe.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
+      await probe.getByRole('navigation', { name: '功能入口' }).getByRole('button', { name: '插件', exact: true }).click()
       const panel = probe.locator('[data-plugin-panel]')
       const refresh = panel.getByRole('button', { name: '刷新', exact: true })
       const add = panel.getByRole('button', { name: '添加插件', exact: true })
@@ -896,7 +896,7 @@ describe('web e2e: plugin manager', () => {
       onTestFailed(() => saveFailureShot(probe, 'web-e2e-plugin-manager-ime-enter'))
       await probe.clock.install()
       await probe.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-      await probe.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
+      await probe.getByRole('navigation', { name: '功能入口' }).getByRole('button', { name: '插件', exact: true }).click()
       const panel = probe.locator('[data-plugin-panel]')
       await panel.getByRole('button', { name: '查看 @fixture/bundle', exact: true }).waitFor({ timeout: 20_000 })
       const trace: string[] = ['Synthetic browser KeyboardEvents, not an OS input-method test.']
@@ -1132,7 +1132,7 @@ describe('web e2e: startup-applied plugin management', () => {
       const tripwire = watchConsole(page)
       onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-live'))
       await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-      await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
+      await page.getByRole('navigation', { name: '功能入口' }).getByRole('button', { name: '插件', exact: true }).click()
       const panel = page.locator('[data-plugin-panel]')
       const toggle = panel.getByRole('switch', { name: '启用 @fixture/bundle' })
       await toggle.waitFor({ timeout: 20_000 })

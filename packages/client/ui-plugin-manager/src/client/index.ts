@@ -1,7 +1,7 @@
 /**
- * Plugin manager, browser half: the **Plugins** entry of the sidebar and the
- * management page it opens in the main column. The page installs, enables,
- * disables, and removes the bundles of the Host's profile through the
+ * Plugin manager, browser half: the **Plugins** entry of the activity bar and
+ * the management page it opens in the frame's activity area. The page installs,
+ * enables, disables, and removes the bundles of the Host's profile through the
  * `pluginManager` Remote and switches their rows in the profile's user layer.
  * A plugin that carries its own configuration renders it on this page through
  * the slots the page declares (`slot-contract.ts`).
@@ -9,11 +9,10 @@
 import type {} from '@deepseek-ai/dsh-client-product-analytics/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-// Type-only: the root `main` keyed slot the page registers into, declared by
-// ui-layout with the panel id brand, and the `sidebar.panellist` list the
-// entry registers into, declared by ui-sidebar.
-import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
-import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
+// Type-only: the root `shell.activity` keyed slot the page registers into and
+// the `shell.activitybar.items` glyph list the entry registers into, both
+// declared by ui-layout.
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: the ctx.remote Context merge and the forwarded-event key face.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
@@ -63,10 +62,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 /** Dictionary namespace owned by this plugin. */
 export const NS = 'pluginManager'
 
-/** The id shared by the sidebar entry and the main panel it opens. */
-export const PANEL_ID = 'plugins' as MainPanelId
+/** The id shared by the activity-bar entry and the content view it opens. */
+export const PANEL_ID = 'plugins'
 
-/** Services required by the sidebar registration and the Remote methods; the inventory says whether the Host manages a profile. */
+/** Services required by the activity registration and the Remote methods; the inventory says whether the Host manages a profile. */
 export const inject = ['slots', 'locale', 'remote', 'remote.pluginManager', 'remote.pluginInventory', 'remote.pluginRegistryProbe', 'configForms', 'layout']
 
 /**
@@ -95,10 +94,11 @@ export function apply(ctx: ClientContext): void {
     return () => { for (const dispose of disposers) dispose() }
   }, 'ui-plugin-manager: host invalidations')
 
-  // The page is a global panel: it belongs to the profile, not to a Session,
-  // and the sidebar's entry selects it. What is installed and switched on is
-  // the page's own; a plugin's configuration arrives through the slots the
-  // page declares here, so the page never names a configurable plugin.
+  // The page is a top-level activity: it belongs to the profile, not to a
+  // Session, and the activity-bar entry selects it in place of the Workspace
+  // columns. What is installed and switched on is the page's own; a plugin's
+  // configuration arrives through the slots the page declares here, so the
+  // page never names a configurable plugin.
   const configLedger = configLedgerSource(ctx)
   const face = controller.inject(configLedger, tabLedgerSource(ctx), text => ctx.locale.resolveText(text))
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
@@ -108,11 +108,11 @@ export function apply(ctx: ClientContext): void {
       dismissNotice: face.dismissNotice,
     }),
   }, PluginRefreshToast))
-  ctx.slots.inject('main', function* () {
+  ctx.slots.inject('shell.activity', function* () {
     const handle = createNavigationStore(), instance = handle.create()
     const store: typeof handle = { ...handle, create: () => instance }
     yield ctx.slots.register({
-      name: 'main',
+      name: 'shell.activity',
       key: PANEL_ID,
       locale: NS,
       store,
@@ -129,20 +129,22 @@ export function apply(ctx: ClientContext): void {
         'plugins.detail.section': { kind: 'list', scope: 'root' },
       },
     }, PluginManagerPage)
-    yield ctx.layout.panelInfo.subscribe(() => {
-      if (ctx.layout.panelInfo.getSnapshot().activePanelId !== PANEL_ID) instance.actions.setView({ kind: 'list' })
+    yield ctx.layout.activityInfo.subscribe(() => {
+      if (ctx.layout.activityInfo.getSnapshot().activeId !== PANEL_ID) instance.actions.setView({ kind: 'list' })
     })
     const disposeNavigation = ctx.reflect.provide('pluginNavigation', {
       openBundle: (packageName: string) => {
-        ctx.layout.selectPanel(PANEL_ID)
+        ctx.layout.selectActivity(PANEL_ID)
         instance.actions.setTab('installed')
         instance.actions.setView({ kind: 'package', name: packageName })
       },
     })
     yield () => { void disposeNavigation() }
   })
-  ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
-    name: 'sidebar.panellist',
+  // The rail entry addresses that view by the same id; the activity bar owns
+  // the button, tooltip, and selected marker around this glyph.
+  ctx.slots.inject('shell.activitybar.items', () => ctx.slots.register({
+    name: 'shell.activitybar.items',
     id: PANEL_ID,
     order: 0,
     label: () => t('panel'),

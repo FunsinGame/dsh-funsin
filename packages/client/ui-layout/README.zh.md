@@ -27,13 +27,50 @@ kind: "package-reference"
 
 桌面 Mod+B 通过与控件共用的布局操作切换左侧栏。模态弹窗打开时此快捷键不可用；终端输入优先。
 
-本插件在 root slot 中组合侧边栏、主内容和右栏。侧边栏宽度为 264～420px，默认为 280px，收起后保留 56px 控制栏；窗口宽度低于 1024px 时自动收起，打开右侧面板也会收起手动展开的侧边栏。右侧面板首次打开时使用视口宽度的 45%，之后保留用户的像素宽度偏好，上限为 70%。为给中栏保留 400px，框架先将右侧面板缩减至 300px，再报告空间不足，使占用方将其关闭，最后才进一步压缩中栏。拖动没有过渡延迟；右侧手柄在关闭或全屏时不显示。
+本插件在 root slot 中组合五段式工作台：品牌区带、工作区页签带、工作台行、底部面板与状态栏。工作台行依次为 48px 活动栏、侧边栏、主内容和右栏；活动栏同时跨越页签带，因此从品牌区带之下延伸到三列底部。侧边栏宽度为 264～420px，默认为 280px，收起后保留 56px 控制栏；内容宽低于 1024px 时自动收起，打开右侧面板也会收起手动展开的侧边栏。右侧面板首次打开时使用视口宽度的 45%，之后保留用户的像素宽度偏好，上限为 70%。为给中栏保留 400px，框架先将右侧面板缩减至 300px，再报告空间不足，使占用方将其关闭，最后才进一步压缩中栏。拖动没有过渡延迟；右侧手柄在关闭或全屏时不显示。
 
-全局面板占据 root 作用域的 `main` keyed slot；`conversation` 是为会话界面保留的 key。`ctx.layout.selectPanel(id)` 选中已注册面板，`null` 则选中会话界面，但不改变当前会话。Plugins 页面是默认组合中的一个全局面板。
+全局面板占据 root 作用域的 `main` keyed slot；`conversation` 是为会话界面保留的 key。`ctx.layout.selectPanel(id)` 选中已注册面板，`null` 则选中会话界面，但不改变当前会话。出厂的全局面板（目前是定时任务）仍使用侧栏的面板列表；Plugins 页面已从该列表移到活动栏。
 
-root 作用域的单一 `shell.header` slot 横跨三列上方的整行：它是框架顶部区带，ui-workspace 的工作区页签条就位于此处。占用方控制自身高度、显隐与横向滚动；三列从该高度之下起始，空内容不预留空间。切换主面板时保留该区带。
+root 作用域的单一 `shell.header` slot 横跨所有其他区带上方的整行：它是框架的品牌区带，由 ui-sidebar 的 `FrameBrand` 占据，使产品标识与名称在任何活动下都常驻。在 Windows 桌面下字标改放在窗口顶栏自身那一行、与原生菜单同一行，因此本区带折叠为零高。占用方控制自身高度；空内容不预留空间。
 
-root 作用域的单一 `shell.bottom` slot 横跨三列下方的整行。占用方控制自身高度与显隐；三列按该高度缩短，空内容不预留空间。切换主面板时保留底部组件。列宽拖拽手柄止于底部内容上方，`shell.overlay` 仍覆盖整个框架。默认组合不占用此 slot。
+root 作用域的单一 `shell.workspace.tabs` slot 是工作区活动页面的顶部：位于活动栏右侧、侧边栏上方，ui-workspace 的工作区页签条就在此处。框架仅在内置 `workspace` 活动被选中时渲染它，因此注册的活动会连同其下方的三列一起替换该页签带。
+
+### 活动栏
+
+活动栏是框架的第一列：root 作用域的单一 `shell.activitybar` 座，由本包自己的活动栏占据，并声明 `shell.activitybar.items`。每个列表项只绘制自己的字形；按钮、工具提示、可访问名与选中标记由外壳持有，标签从注册元数据解析。因此一个活动只需贡献一个字形和一个内容视图，二者用同一个 id 关联：
+
+```ts ignore-check
+ctx.slots.inject('shell.activitybar.items', () => ctx.slots.register({
+  name: 'shell.activitybar.items', id: 'plugins', order: 200, label: () => t('plugins'),
+}, PluginGlyph))
+
+ctx.slots.inject('shell.activity', () => ctx.slots.register({
+  name: 'shell.activity', key: 'plugins',
+}, PluginActivity))
+```
+
+活动栏底部承载 root 作用域的单一 `shell.activitybar.settings` 座：ui-settings-general 的设置外壳以紧凑形态占据它，并把账户入口叠放在设置触发器之上，因此两者都位于活动栏底部而不是侧栏页脚。
+
+内置的 `workspace` 入口是框架自己的组合——侧边栏、主内容与右栏——不是列表项，因此插件无法覆盖它。被选中活动的 `shell.activity` 视图占据活动栏右侧的整块区域，替代三列。选中未注册视图的入口会抛错并保留当前选中；被选中的入口注销后回落到 `workspace`。`ctx.layout.selectActivity(id)` 以编程方式做同样的选中——插件管理器用它从任意位置打开组合包详情——`ctx.layout.activityInfo` 发布当前 id，供需要感知「离开自己的活动」的界面使用。活动栏无论列表是否为空都预留 48px 轨道，`layoutInfo.viewportWidth`（也就是右栏占用方拿到的 `viewportWidth`）是该轨道右侧的宽度，而非窗口宽度。
+
+出厂 Plugins 页面是第一个活动：入口绘制插件字形，`shell.activity` 视图就是管理页面，选中即用该页面替代工作台三列。
+
+root 作用域的单一 `shell.bottom` slot 横跨工作台行下方、状态栏上方的整行。占用方控制自身高度与显隐；三列按该高度缩短，空内容不预留空间。切换主面板时保留底部组件。列宽拖拽手柄止于底部内容上方，`shell.overlay` 仍覆盖整个框架。默认组合不占用此 slot。
+
+### 状态栏
+
+状态栏是框架的最后一段：root 作用域的单一 `shell.statusbar` 座，由本包自己的状态栏占据。与 `shell.bottom` 不同，即使没有任何条目它也预留自身高度（22px），因为这条带本身就是 chrome。它声明两个列表 slot：`shell.statusbar.left` 与 `shell.statusbar.right`；前导组占用剩余宽度并先截断，尾部组永不收缩。
+
+条目自行绘制内容，并通过注册的观测源保持最新：
+
+```ts ignore-check
+ctx.slots.inject('shell.statusbar.left', () => ctx.slots.register({
+  name: 'shell.statusbar.left', id: 'build', order: 100, locale: 'myPlugin',
+  inject: () => ({ hooks: { build: buildState } }),
+}, BuildStatus))
+```
+
+当 `buildState` 发布新值时，绑定的 `useBuild` 会重渲染该条目，因此更新不需要调用状态栏；状态栏自身不持有任何条目状态。
 
 <a id="window-chrome-seat"></a>
 ### 窗口 chrome 座
@@ -58,7 +95,7 @@ Windows Electron 的 `data-windows-titlebar` 标记在所有列上方预留顶�
 
 `selectPanel(id)` 在改变选中态前检查实时 `main` 注册表；缺失的 key 会抛错并保留当前面板。`beginNavigation()` 为异步 UI 导航返回 abort signal。后续调用、有效面板选择（包括重复选择）或布局释放会中止该 signal，但不取消底层会话创建。消费方在提交导航或搬移草稿前检查 signal。
 
-一次注册声明框架的子 slot，并绑定 `ctx.layout` 的 `selectPanel`、`toggleSidebar`、`openRightbar(track, fullscreen)` 与 `closeRightbar`。同一个 root 存储把 `panelInfo` 选中态与 `layoutInfo` 测量、宽度偏好、呈现报告分开。`ctx.layout.panelInfo` 与标准 `usePanelInfo` hook 共用同一个选中态来源；AppFrame 订阅引用稳定的布局对象。`rightbar` owner 提供实际 `width`、`viewportWidth`，以及表示能否以普通模式呈现的 `canShow`；占用方在空间不足时执行确定性的收起，变宽不自行重新展开。全屏隐藏宽度手柄，但不自行释放占用方要求保留的轨道。AppFrame 保持各列容器挂载。右栏的 root 控制器仅在选中会话界面时，经 `SessionProvider` 渲染 `rightbar.session`；内容卸载时的报告释放轨道。独立的标题组件仅在会话界面可见时使用所选会话标题，以构建配置的产品标题或本地化 `common.brand.localBuild` 为回退值；语言变化会更新该回退值。主题呈现器是第二个 effect：从解析后的快照做纯 DOM 写入——初始状态经 getter 读取一次，此后仅事件驱动，不经过 React。它先应用调色板、字号、字体列表与 token 变量，再把渲染出的背景测量为唯一的颜色依据。全屏呈现禁用网格和手柄过渡；占用方完全覆盖框架后才报告新的列布局。退出全屏时，框架先保持无过渡并安装目标布局：关闭移除右轨道，恢复保留右轨道。后续普通几何操作恢复正常过渡。
+一次注册声明框架的子 slot，并绑定 `ctx.layout` 的 `selectPanel`、`selectActivity`、`toggleSidebar`、`openRightbar(track, fullscreen)` 与 `closeRightbar`。另两次注册占据框架自己的 chrome 座：活动栏声明 `shell.activitybar.items`，状态栏声明 `shell.statusbar.left` 与 `shell.statusbar.right`。三者共用同一个 root 存储，把 `panelInfo` 选中态、`activityInfo` 选中态与 `layoutInfo` 测量、宽度偏好、呈现报告分开。可见的活动栏列表由 `shell.activitybar.items` 账本投影成快照存储（id、order、解析后的标签），在注册与语言变化时刷新；被选中项离开账本时回落到 `workspace`。`ctx.layout.panelInfo` 与标准 `usePanelInfo` hook 共用同一个选中态来源；AppFrame 订阅引用稳定的布局对象。`rightbar` owner 提供实际 `width`、`viewportWidth`，以及表示能否以普通模式呈现的 `canShow`；占用方在空间不足时执行确定性的收起，变宽不自行重新展开。全屏隐藏宽度手柄，但不自行释放占用方要求保留的轨道。AppFrame 保持各列容器挂载。右栏的 root 控制器仅在选中会话界面时，经 `SessionProvider` 渲染 `rightbar.session`；内容卸载时的报告释放轨道。独立的标题组件仅在会话界面可见时使用所选会话标题，以构建配置的产品标题或本地化 `common.brand.localBuild` 为回退值；语言变化会更新该回退值。主题呈现器是第二个 effect：从解析后的快照做纯 DOM 写入——初始状态经 getter 读取一次，此后仅事件驱动，不经过 React。它先应用调色板、字号、字体列表与 token 变量，再把渲染出的背景测量为唯一的颜色依据。全屏呈现禁用网格和手柄过渡；占用方完全覆盖框架后才报告新的列布局。退出全屏时，框架先保持无过渡并安装目标布局：关闭移除右轨道，恢复保留右轨道。后续普通几何操作恢复正常过渡。
 
 </details>
 
@@ -94,7 +131,10 @@ Windows Electron 的 `data-windows-titlebar` 标记在所有列上方预留顶�
 这些限制界定了当前布局行为。它们是当前包约束，不是通用窗口管理器对比或任务积压。
 
 - **面板几何是瞬时状态**——重新加载会恢复侧栏默认值并隐藏右侧面板；拖动设置的宽度是整个框架共用的一份偏好，而非每个会话各自的属性。
-- **极窄窗口**——右侧面板关闭后，中栏仍可能小于 400px；左侧 56px 控制栏仍会保留。
+- **选中活动同样是瞬时状态**——重新加载回到内置的 `workspace` 活动；状态栏条目自身不持有值，只渲染其注册观测源发布的内容。
+- **极窄窗口**——右侧面板关闭后，中栏仍可能小于 400px；左侧 56px 控制栏仍会保留，48px 活动栏则从不退让。
+- **活动栏是固定 48px 轨道**——即使没有任何注册条目也预留该宽度，插件无法加宽或隐藏它。
+- **窗口 chrome 几何不随活动栏移动**——活动栏只占用工作台行，因此 macOS 的 `shell.leading` 座与 Windows 标题栏保持原有内缩，活动栏自顶部区带之下开始。
 - **轨道与面板仅在动画期间沿同一条曲线运动**——离散开合时框架设置 `data-animating`，其轨道过渡和占用方的滑入读取同一组时长与缓动变量；占用方若自用一套，挤压时面板边缘就会与会话界面的边缘脱开。拖拽和即时呈现切换不带过渡，因此该曲线不覆盖它们。
 - **挤压重排期间无滚动锚定**——布局变化可能移动读者的视口。
 

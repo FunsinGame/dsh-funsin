@@ -1,11 +1,14 @@
 /**
- * Three-column shell frame, registered into the built-in 'root' slot (the web
- * shell renders only 'root'). Owns the grid tracks (sidebar | center |
+ * Workbench frame, registered into the built-in 'root' slot (the web shell
+ * renders only 'root'). Owns the grid: four rows (header, workbench, bottom
+ * panel, status bar) and four columns (activity rail, sidebar, center,
  * rightbar), the drag handles (pointer capture + rAF throttle), the column
  * solve (columns.ts), and the child-slot render decisions: the sidebar slot
  * receives live parameters from that solve. The root-scoped main slot selects
- * the Conversation or a global panel. Each column occupant owns its Session
- * binding and reports the geometry it needs.
+ * the Conversation or a global panel. The activity rail selects a top-level
+ * activity: the frame's own Workspace composition (all three columns) or a
+ * registered `shell.activity` key that replaces them. Each column occupant owns
+ * its Session binding and reports the geometry it needs.
  *
  * The right column is a track, not a box: its occupant draws its panel anchored
  * to the frame's right edge at the resolved normal width, and the
@@ -19,15 +22,16 @@ import type { ReactNode } from 'react'
 import type {
   PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore,
 } from '@deepseek-ai/dsh-client-ui-slots'
-import { CENTER_MIN, clampWidth, computeColumns, RIGHTBAR_DEFAULT_RATIO, RIGHTBAR_MAX_RATIO, RIGHTBAR_MIN, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT } from './columns.ts'
+import { ACTIVITY_RAIL_WIDTH, CENTER_MIN, clampWidth, computeColumns, RIGHTBAR_DEFAULT_RATIO, RIGHTBAR_MAX_RATIO, RIGHTBAR_MIN, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT } from './columns.ts'
 import { DocumentTitle } from './DocumentTitle.tsx'
+import { WORKSPACE_ACTIVITY } from './stores.ts'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
 
 /** Full composed props: runtime share + child-slot render share + store share. */
 export type AppFrameProps =
   & PropsRuntime<'root'>
-  & PropsRenderSlots<'sidebar' | 'main' | 'rightbar' | 'shell.header' | 'shell.bottom' | 'shell.overlay' | 'shell.leading'>
+  & PropsRenderSlots<'sidebar' | 'main' | 'rightbar' | 'shell.header' | 'shell.workspace.tabs' | 'shell.activitybar' | 'shell.activity' | 'shell.bottom' | 'shell.statusbar' | 'shell.overlay' | 'shell.leading'>
   & PropsStore<ReturnType<typeof createLayoutStore>>
   & PropsLocale<'common'>
 
@@ -127,6 +131,7 @@ export function AppFrame({
   t,
 }: AppFrameProps) {
   const layoutInfo = useStore(state => state.layoutInfo)
+  const activity = useStore(state => state.activityInfo.activeId)
   const frameRef = useRef<HTMLDivElement | null>(null)
   const viewport = layoutInfo.viewportWidth
 
@@ -139,7 +144,11 @@ export function AppFrame({
     let disposed = false
     const measure = () => {
       const width = el.getBoundingClientRect().width
-      if (width > 0) actions.setViewportWidth(width)
+      // The activity bar is frame chrome, not column content: store the width
+      // right of it so every solve and breakpoint prices the content area. A
+      // box no wider than the rail is a hidden frame, not a zero-width
+      // workbench, so it keeps the last usable measurement.
+      if (width > ACTIVITY_RAIL_WIDTH) actions.setViewportWidth(width - ACTIVITY_RAIL_WIDTH)
     }
     measure()
     const observer = new ResizeObserver(() => {
@@ -230,7 +239,7 @@ export function AppFrame({
   const onRightbarDrag = useCallback((dx: number) => {
     actions.setRightbar(rightbarBase.current - dx)
   }, [actions])
-  const productTitle = process.env.DSH_CLIENT_TITLE ?? t('brand.localBuild')
+  const productTitle = process.env.DSH_CLIENT_TITLE ?? t('brand.name')
   // The rendered template lets the grid solve the squeeze natively: the centre
   // declares its protected minimum and the right column bids up to the clamped
   // preference, so a window resize lands in the same layout pass as the frame
@@ -257,6 +266,9 @@ export function AppFrame({
   // --dsh-frame-leading-clearance under the same collapsed condition.
   const leading = useMemo(() => renderSlot('shell.leading', {}), [renderSlot])
   const leadingMounted = darwin && sidebarCollapsed
+  // The frame's own composition is the built-in Workspace activity; any other
+  // selection replaces all three columns with that activity's keyed content.
+  const workspaceActive = activity === WORKSPACE_ACTIVITY
 
   return (
     <div
@@ -264,9 +276,10 @@ export function AppFrame({
       className={css.frame}
       style={{
         ...(document.documentElement.hasAttribute('data-windows-titlebar')
-          ? { '--dsh-windows-sidebar-width': `${cols.sidebar}px` } : {}),
-        gridTemplateColumns:
-          `${cols.sidebar}px minmax(${cols.rightbar === 0 ? 0 : CENTER_MIN}px, 1fr) minmax(0px, ${rightbarMax}px)`,
+          ? { '--dsh-windows-sidebar-width': `${ACTIVITY_RAIL_WIDTH + cols.sidebar}px` } : {}),
+        gridTemplateColumns: workspaceActive
+          ? `${ACTIVITY_RAIL_WIDTH}px ${cols.sidebar}px minmax(${cols.rightbar === 0 ? 0 : CENTER_MIN}px, 1fr) minmax(0px, ${rightbarMax}px)`
+          : `${ACTIVITY_RAIL_WIDTH}px minmax(0px, 1fr) 0px 0px`,
       }}
       data-sidebar-collapsed={sidebarCollapsed || undefined}
       data-rightbar-collapsed={cols.rightbar === 0 || undefined}
@@ -283,17 +296,38 @@ export function AppFrame({
       <div className={css.headerRow} data-shell-header>
         {header}
       </div>
-      <div className={css.sidebarCol}>
-        {sidebar}
+      <div className={css.railCol} data-shell-activitybar>
+        {renderSlot('shell.activitybar', {})}
       </div>
-      <>
-        <CenterColumn>{main}</CenterColumn>
-        <RightbarColumn>
-          {renderSlot('rightbar', { width: normal.rightbar, viewportWidth: viewport, canShow: normal.rightbar > 0 })}
-        </RightbarColumn>
-      </>
+      {/* The Workspace inventory belongs to the Workspace activity: it sits at
+          the top of that page and leaves with it. */}
+      {workspaceActive && (
+        <div className={css.workspaceTabsRow} data-shell-workspace-tabs>
+          {renderSlot('shell.workspace.tabs', {})}
+        </div>
+      )}
+      {workspaceActive
+        ? (
+          <>
+            <div className={css.sidebarCol}>
+              {sidebar}
+            </div>
+            <CenterColumn>{main}</CenterColumn>
+            <RightbarColumn>
+              {renderSlot('rightbar', { width: normal.rightbar, viewportWidth: viewport, canShow: normal.rightbar > 0 })}
+            </RightbarColumn>
+          </>
+        )
+        : (
+          <div className={css.activityArea} data-shell-activity>
+            {renderSlot('shell.activity', {}, { entryKey: activity })}
+          </div>
+        )}
       <div className={css.bottomRow} data-shell-bottom>
         {renderSlot('shell.bottom', {})}
+      </div>
+      <div className={css.statusRow} data-shell-statusbar>
+        {renderSlot('shell.statusbar', {})}
       </div>
       <div className={css.overlayLayer} data-shell-overlay>
         {overlays}
@@ -304,9 +338,9 @@ export function AppFrame({
         </div>
       )}
       {/* The collapsed rail is fixed-width: no resize handle while closed. */}
-      {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
-      {layoutInfo.rightbarShown && !layoutInfo.rightbarFullscreen && normal.rightbar > 0 && (
-        <DragHandle side="rightbar" left={viewport - normal.rightbar} onStart={onRightbarStart} onDrag={onRightbarDrag} onEnd={onDragEnd} />
+      {workspaceActive && !sidebarCollapsed && <DragHandle side="sidebar" left={ACTIVITY_RAIL_WIDTH + cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
+      {workspaceActive && layoutInfo.rightbarShown && !layoutInfo.rightbarFullscreen && normal.rightbar > 0 && (
+        <DragHandle side="rightbar" left={ACTIVITY_RAIL_WIDTH + viewport - normal.rightbar} onStart={onRightbarStart} onDrag={onRightbarDrag} onEnd={onDragEnd} />
       )}
     </div>
   )

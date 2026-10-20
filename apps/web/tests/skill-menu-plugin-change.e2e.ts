@@ -45,7 +45,7 @@ describe('web e2e: the slash menu follows plugin switches', () => {
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     await connectFreshWorkspace(page, scaffold.workspaceCwd)
     await plugins.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-    await plugins.getByRole('navigation', { name: 'Global panels' }).getByRole('button', { name: 'Plugins', exact: true }).click()
+    await plugins.getByRole('navigation', { name: 'Activity bar' }).getByRole('button', { name: 'Plugins', exact: true }).click()
     const panel = plugins.locator('[data-plugin-panel]')
     await panel.getByRole('button', { name: 'More', exact: true }).click()
     toggle = panel.locator(`[data-plugin-package="${BUNDLE}"]`).getByRole('switch')

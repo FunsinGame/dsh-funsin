@@ -1,11 +1,13 @@
 /**
  * Sidebar slot contract: the registrant-side props composition for the
- * layout-owned `sidebar` slot, plus the holes this shell declares. The shell
- * owns column geometry, the brand row, New Session, and global panel rows;
- * everything between the workspace section header and the list bottom is the
- * `sidebar.workspaces` registrant's (ui-workspace), and the foot is the
- * `sidebar.settings` registrant's (ui-settings), followed by optional footer
- * actions in `sidebar.footer.action`.
+ * layout-owned `sidebar` slot, plus the holes this package declares. The shell
+ * owns column geometry, New Session, and global panel rows; the frame brand
+ * lives in the frame's top band, which this package also occupies; everything
+ * between the workspace section header and the list bottom is the
+ * `sidebar.workspaces` registrant's (ui-workspace). The foot keeps the
+ * `sidebar.settings` seat and the `sidebar.footer.action` list, both unoccupied
+ * in the shipped composition now that the settings trigger lives in the
+ * activity rail.
  */
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
@@ -18,16 +20,16 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     /** Non-interactive notification inside the collapsed sidebar expand button. */
     'sidebar.toggle.badge': { kind: 'single'; scope: 'root'; owner: Record<never, never> }
     /**
-     * Brand mark rendered in the expanded brand row and collapsed rail.
-     * Declared by this package's `sidebar` entry; deployments may replace
-     * the shell's fish fallback without replacing the surrounding controls.
+     * Brand mark in the frame's top band. Declared by this package's
+     * `shell.header` entry; deployments may replace the shell's fish fallback
+     * without replacing the band around it.
      */
-    'sidebar.brand.mark': { kind: 'single'; scope: 'root'; owner: SidebarBrandMarkOwnerProps }
+    'shell.header.brand.mark': { kind: 'single'; scope: 'root'; owner: BrandMarkOwnerProps }
     /**
-     * Brand name rendered beside the expanded mark. Declared by this
-     * package's `sidebar` entry; the shell supplies a generic text fallback.
+     * Brand name rendered beside the mark. Declared by this package's
+     * `shell.header` entry; the shell supplies a generic text fallback.
      */
-    'sidebar.brand.name': { kind: 'single'; scope: 'root'; owner: SidebarBrandNameOwnerProps }
+    'shell.header.brand.name': { kind: 'single'; scope: 'root'; owner: BrandNameOwnerProps }
     /**
      * Global panel icons. Each list id addresses the matching main panel;
      * the sidebar owns the button and resolves its label from list metadata.
@@ -42,8 +44,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'sidebar.workspaces': { kind: 'single'; scope: 'root'; owner: SidebarSectionOwnerProps }
     /**
      * The settings seat at the sidebar foot. Declared by this package's
-     * 'sidebar' entry; ui-settings registers its trigger row + modal panel.
-     * The sidebar passes only its column state — it holds no settings state.
+     * 'sidebar' entry; unoccupied in the shipped composition, where the
+     * settings trigger lives in the activity rail's own seat.
      */
     'sidebar.settings': { kind: 'single'; scope: 'root'; owner: SidebarSettingsOwnerProps }
     /**
@@ -54,14 +56,14 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** Geometry supplied to the sidebar brand-mark occupant. */
-export interface SidebarBrandMarkOwnerProps {
+/** Geometry supplied to the frame brand-mark occupant. */
+export interface BrandMarkOwnerProps {
   /** Requested square edge in pixels. */
   size: number
 }
 
-/** Empty owner share for the sidebar brand-name occupant. */
-export interface SidebarBrandNameOwnerProps {
+/** Empty owner share for the frame brand-name occupant. */
+export interface BrandNameOwnerProps {
   /** Marker field: the occupant owns its own content and width. */
   children?: never
 }
@@ -137,8 +139,6 @@ export type SidebarRootInjected = {
 export type SidebarRootComponentProps =
   PropsRuntime<'sidebar'>
   & PropsRenderSlots<
-    | 'sidebar.brand.mark'
-    | 'sidebar.brand.name'
     | 'sidebar.toggle.badge'
     | 'sidebar.panellist'
     | 'sidebar.workspaces'

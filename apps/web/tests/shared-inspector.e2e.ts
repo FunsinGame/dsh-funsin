@@ -330,7 +330,7 @@ it('opens bottom DevTools and retains its document and selected panel across Ses
   await page.keyboard.press('ControlOrMeta+Shift+Period')
   await iframe.waitFor({ state: 'visible' })
   expect(await unchanged()).toEqual(identity)
-  await page.getByRole('navigation', { name: 'Global panels' }).getByRole('button', { name: 'Plugins', exact: true }).click()
+  await page.getByRole('navigation', { name: 'Activity bar' }).getByRole('button', { name: 'Plugins', exact: true }).click()
   await page.locator('[data-plugin-panel]').waitFor()
   expect(await iframe.isVisible()).toBe(true)
   expect(await unchanged()).toEqual(identity)

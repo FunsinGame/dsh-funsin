@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * Settings shell registration inside the assembled web client: the shell
- * occupies the `sidebar.settings` hole ui-sidebar declares, its ledger
+ * occupies the `shell.activitybar.settings` hole ui-sidebar declares, its ledger
  * projections read the product's real sections, its connection control is the
  * roster's Connection, and it survives a Loader rebuild of the declarer.
  */
@@ -14,13 +14,13 @@ import { SettingsRoot } from '../src/client/SettingsRoot.tsx'
 import type { DesktopUpdatePresentation } from '../src/types.ts'
 
 const SELF = '@deepseek-ai/dsh-client-ui-settings-general'
-const SIDEBAR = '@deepseek-ai/dsh-client-ui-sidebar'
+const LAYOUT = '@deepseek-ai/dsh-client-ui-layout'
 const it = createClientTest({ roster: webApp })
 /** The whole roster's first boot pays the cold module transform of every plugin package. */
 const COLD_BOOT_TIMEOUT_MS = 60_000
 
 function injectedOf(c: TestClient): SettingsRootInjected {
-  const entry = c.ctx.slots.entries('sidebar.settings')[0]!
+  const entry = c.ctx.slots.entries('shell.activitybar.settings')[0]!
   return (entry.inject as () => SettingsRootInjected)()
 }
 
@@ -80,9 +80,9 @@ describe('ui-settings-general shell', () => {
     expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'remote.settings', 'configForms', 'shortcuts', 'modules'])
   })
 
-  it('occupies sidebar.settings, declared by ui-sidebar, and declares every child slot', async ({ start }) => {
+  it('occupies the activity rail settings seat and declares every child slot', async ({ start }) => {
     const c = await start()
-    expect(c.ctx.slots.entries('sidebar.settings').map(entry => entry.component)).toEqual([SettingsRoot])
+    expect(c.ctx.slots.entries('shell.activitybar.settings').map(entry => entry.component)).toEqual([SettingsRoot])
     for (const name of CHILD_NAMES) expect(c.ctx.slots.spec(name)).toEqual(CHILD_SPECS[name])
   }, COLD_BOOT_TIMEOUT_MS)
 
@@ -158,12 +158,12 @@ describe('ui-settings-general shell', () => {
 
   it('re-registers after the declarer reloads: the cascade removes the shell, the rebuilt declaration takes it back', async ({ start }) => {
     const c = await start()
-    const before = c.ctx.slots.entries('sidebar.settings')[0]
+    const before = c.ctx.slots.entries('shell.activitybar.settings')[0]
     expect(before).toBeDefined()
-    await c.reload(SIDEBAR)
+    await c.reload(LAYOUT)
     await c.flush()
-    expect(c.ctx.slots.entries('sidebar.settings').map(entry => entry.component)).toEqual([SettingsRoot])
-    expect(c.ctx.slots.entries('sidebar.settings')[0]).not.toBe(before)
+    expect(c.ctx.slots.entries('shell.activitybar.settings').map(entry => entry.component)).toEqual([SettingsRoot])
+    expect(c.ctx.slots.entries('shell.activitybar.settings')[0]).not.toBe(before)
     for (const name of CHILD_NAMES) expect(c.ctx.slots.spec(name)).toEqual(CHILD_SPECS[name])
   })
 
@@ -171,7 +171,7 @@ describe('ui-settings-general shell', () => {
     const c = await start()
     await c.unload(SELF)
     await c.flush()
-    expect(c.ctx.slots.entries('sidebar.settings')).toHaveLength(0)
+    expect(c.ctx.slots.entries('shell.activitybar.settings')).toHaveLength(0)
     for (const name of CHILD_NAMES) expect(c.ctx.slots.spec(name)).toBeUndefined()
   })
 })

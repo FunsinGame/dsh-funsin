@@ -48,7 +48,7 @@ it('keeps settings and expanded plugin dialogs clear of the Windows caption acro
       expect(await settings.isVisible()).toBe(true)
       await settings.getByRole('button', { name: '关闭', exact: true }).click()
       if (await reopenSidebar.isVisible()) await reopenSidebar.click()
-      await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
+      await page.getByRole('navigation', { name: '功能入口' }).getByRole('button', { name: '插件', exact: true }).click()
       await page.locator('[data-plugin-panel]').getByRole('button', { name: '添加插件', exact: true }).click()
       const plugin = page.getByRole('dialog', { name: '添加插件', exact: true })
       await plugin.getByRole('button', { name: '插件安装引导和示例', exact: true }).click()
