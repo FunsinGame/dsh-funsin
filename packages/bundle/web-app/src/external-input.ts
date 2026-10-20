@@ -125,13 +125,17 @@ function dshHome(): string {
 export function installExternalInput(ctx: Context): void {
   const token = randomBytes(32).toString('base64url')
   const pending = new Map<string, PendingAck>()
+  // One process can mount the Web surface more than once (developer reloads,
+  // secondary windows). Each mount owns its record name so a failing or
+  // disposing mount can never delete a sibling's live record.
+  const instanceName = `${String(process.pid)}-${randomBytes(4).toString('hex')}.json`
   // A desktop development build sets its own DSH_HOME under `.desktop-build`,
   // which no editor knows. Write the same record to the user-level home as
   // well, so a local editor's default discovery sees every running instance
   // regardless of which home the Host was launched with.
   const discoveryFiles = [...new Set([
-    resolve(join(dshHome(), 'runtime', 'external-input', `${String(process.pid)}.json`)),
-    resolve(join(homedir(), '.dsh', 'runtime', 'external-input', `${String(process.pid)}.json`)),
+    resolve(join(dshHome(), 'runtime', 'external-input', instanceName)),
+    resolve(join(homedir(), '.dsh', 'runtime', 'external-input', instanceName)),
   ])]
 
   const writeDiscovery = (): void => {
@@ -154,18 +158,6 @@ export function installExternalInput(ctx: Context): void {
     }
   }
 
-  ctx.effect(() => {
-    writeDiscovery()
-    return () => {
-      for (const file of discoveryFiles) rmSync(file, { force: true })
-      for (const waiter of pending.values()) {
-        clearTimeout(waiter.timer)
-        waiter.resolve(undefined)
-      }
-      pending.clear()
-    }
-  }, 'external-input: discovery file and pending acks')
-
   ctx.effect(() => ctx.webServer.register({
     kind: 'exact',
     path: EXTERNAL_INPUT_INSERT_PATH,
@@ -177,6 +169,20 @@ export function installExternalInput(ctx: Context): void {
     path: EXTERNAL_INPUT_ACK_PATH,
     handler: (request, response) => { void handleAck(request, response) },
   }), 'external-input: ack route')
+
+  // Publish only after both routes exist: a mount that loses the route
+  // registration race must not leave a record advertising an unusable port.
+  ctx.effect(() => {
+    writeDiscovery()
+    return () => {
+      for (const file of discoveryFiles) rmSync(file, { force: true })
+      for (const waiter of pending.values()) {
+        clearTimeout(waiter.timer)
+        waiter.resolve(undefined)
+      }
+      pending.clear()
+    }
+  }, 'external-input: discovery file and pending acks')
 
   /**
    * Accept one authenticated insertion request, broadcast it, and wait for the
