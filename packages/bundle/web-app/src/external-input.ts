@@ -18,7 +18,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 
 /**
@@ -124,31 +124,40 @@ function dshHome(): string {
  */
 export function installExternalInput(ctx: Context): void {
   const token = randomBytes(32).toString('base64url')
-  const directory = join(dshHome(), 'runtime', 'external-input')
-  const discoveryFile = join(directory, `${String(process.pid)}.json`)
   const pending = new Map<string, PendingAck>()
+  // A desktop development build sets its own DSH_HOME under `.desktop-build`,
+  // which no editor knows. Write the same record to the user-level home as
+  // well, so a local editor's default discovery sees every running instance
+  // regardless of which home the Host was launched with.
+  const discoveryFiles = [...new Set([
+    resolve(join(dshHome(), 'runtime', 'external-input', `${String(process.pid)}.json`)),
+    resolve(join(homedir(), '.dsh', 'runtime', 'external-input', `${String(process.pid)}.json`)),
+  ])]
 
   const writeDiscovery = (): void => {
-    try {
-      mkdirSync(dirname(discoveryFile), { recursive: true })
-      writeFileSync(discoveryFile, JSON.stringify({
-        schema: 1,
-        pid: process.pid,
-        port: ctx.webServer.port,
-        url: `http://127.0.0.1:${String(ctx.webServer.port)}`,
-        token,
-        cwd: process.cwd(),
-        startedAt: new Date().toISOString(),
-      }, null, 2), { mode: 0o600 })
-    } catch (error) {
-      console.error('[external-input] could not write the discovery file:', error)
+    const record = JSON.stringify({
+      schema: 1,
+      pid: process.pid,
+      port: ctx.webServer.port,
+      url: `http://127.0.0.1:${String(ctx.webServer.port)}`,
+      token,
+      cwd: process.cwd(),
+      startedAt: new Date().toISOString(),
+    }, null, 2)
+    for (const file of discoveryFiles) {
+      try {
+        mkdirSync(dirname(file), { recursive: true })
+        writeFileSync(file, record, { mode: 0o600 })
+      } catch (error) {
+        console.error(`[external-input] could not write the discovery file ${file}:`, error)
+      }
     }
   }
 
   ctx.effect(() => {
     writeDiscovery()
     return () => {
-      rmSync(discoveryFile, { force: true })
+      for (const file of discoveryFiles) rmSync(file, { force: true })
       for (const waiter of pending.values()) {
         clearTimeout(waiter.timer)
         waiter.resolve(undefined)
