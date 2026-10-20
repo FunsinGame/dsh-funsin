@@ -260,16 +260,14 @@ describe('Windows caption insets', () => {
     expect(screen.getAllByRole('button', { name: 'New session' })).toHaveLength(1)
     // The expanded caption is clean: no sidebar collapse control.
     expect(screen.queryByRole('button', { name: 'Collapse sidebar' })).toBeNull()
-    expect(document.documentElement.style.getPropertyValue('--dsh-windows-caption-controls-start')).toBe('var(--dsh-windows-brand-end, 180px)')
-    expect(document.documentElement.style.getPropertyValue('--dsh-windows-menu-start')).toBe('calc(var(--dsh-windows-caption-controls-start, 180px) + 0px)')
+    expect(document.documentElement.style.getPropertyValue('--dsh-windows-caption-controls-width')).toBe('0px')
     // The collapsed caption adds the expand control and New Session before the menus.
     shell.rerender({ collapsed: true, width: 0 })
     expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeTruthy()
-    expect(document.documentElement.style.getPropertyValue('--dsh-windows-menu-start')).toBe('calc(var(--dsh-windows-caption-controls-start, 180px) + 72px)')
-    // The chrome insets leave with the shell.
+    expect(document.documentElement.style.getPropertyValue('--dsh-windows-caption-controls-width')).toBe('72px')
+    // The reservation leaves with the shell; the frame brand keeps the insets.
     cleanup()
-    expect(document.documentElement.style.getPropertyValue('--dsh-windows-menu-start')).toBe('')
-    expect(document.documentElement.style.getPropertyValue('--dsh-windows-caption-controls-start')).toBe('')
+    expect(document.documentElement.style.getPropertyValue('--dsh-windows-caption-controls-width')).toBe('')
   })
 })
 

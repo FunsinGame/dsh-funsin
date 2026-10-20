@@ -28,6 +28,8 @@ afterEach(() => {
   cleanup()
   document.documentElement.removeAttribute('data-windows-titlebar')
   document.documentElement.style.removeProperty('--dsh-windows-brand-end')
+  document.documentElement.style.removeProperty('--dsh-windows-caption-controls-start')
+  document.documentElement.style.removeProperty('--dsh-windows-menu-start')
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
   observers = []
@@ -68,13 +70,20 @@ describe('FrameBrand', () => {
     expect(brand.className).toContain('captionBar')
     expect(observers).toHaveLength(1)
     expect(observers[0]!.observed[0]).toBe(brand)
+    // The caption controls start at the brand's edge; the menus reserve that
+    // edge plus whatever width the sidebar declares for its caption controls.
     expect(document.documentElement.style.getPropertyValue('--dsh-windows-brand-end')).toBe('8px')
+    expect(document.documentElement.style.getPropertyValue('--dsh-windows-caption-controls-start')).toBe('8px')
+    expect(document.documentElement.style.getPropertyValue('--dsh-windows-menu-start'))
+      .toBe('calc(8px + var(--dsh-windows-caption-controls-width, 0px))')
     // A width change republishes the edge.
     observers[0]!.fire()
     expect(document.documentElement.style.getPropertyValue('--dsh-windows-brand-end')).toBe('8px')
     view.unmount()
     expect(observers[0]!.disconnected).toBe(true)
-    expect(document.documentElement.style.getPropertyValue('--dsh-windows-brand-end')).toBe('')
+    for (const name of ['--dsh-windows-brand-end', '--dsh-windows-caption-controls-start', '--dsh-windows-menu-start']) {
+      expect(document.documentElement.style.getPropertyValue(name)).toBe('')
+    }
   })
 
   it('falls back to the sleeping whale and the deepsleep wordmark with its build badge', () => {

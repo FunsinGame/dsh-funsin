@@ -1,6 +1,7 @@
 /**
  * Windows desktop: the frame brand shares the window caption's first line with
- * the native menus instead of adding a second band below them.
+ * the native menus instead of adding a second band below them, and keeps that
+ * reservation when an activity replaces the Workspace columns.
  */
 import { chromium, type Page } from 'playwright'
 import { expect, it } from 'vitest'
@@ -9,8 +10,11 @@ import { launchWebScaffold, watchConsole } from './scaffold.ts'
 interface CaptionGeometry {
   brandTop: number
   brandHeight: number
+  brandRight: number
   captionControlsStart: string
   headerHeight: number
+  /** Where the native menus start, resolved from the published variable. */
+  menuStartX: number
   railTop: number
 }
 
@@ -18,11 +22,20 @@ async function geometry(page: Page): Promise<CaptionGeometry> {
   return page.evaluate(() => {
     const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect()
     const brand = box('[data-frame-brand]')
+    // The native menu bar is OS-drawn, so its start is resolved through a probe
+    // that consumes the same variable the desktop preload positions it from.
+    const probe = document.createElement('div')
+    probe.style.cssText = 'position: fixed; top: 0; left: var(--dsh-windows-menu-start); width: 1px; height: 1px;'
+    document.body.appendChild(probe)
+    const menuStartX = probe.getBoundingClientRect().x
+    probe.remove()
     return {
       brandTop: brand.top,
       brandHeight: brand.height,
+      brandRight: brand.right,
       captionControlsStart: document.documentElement.style.getPropertyValue('--dsh-windows-caption-controls-start'),
       headerHeight: box('[data-shell-header]').height,
+      menuStartX,
       railTop: box('[data-shell-activitybar]').top,
     }
   })
@@ -60,7 +73,27 @@ it('keeps the brand on the Windows caption line, above the collapsed brand band'
       expect(box.headerHeight).toBe(0)
       expect(box.railTop).toBe(40)
       // The caption controls start after the measured wordmark, not at a fixed inset.
-      expect(box.captionControlsStart).toBe('var(--dsh-windows-brand-end, 180px)')
+      expect(box.captionControlsStart).not.toBe('')
+      // The native menus start after the wordmark rather than over it.
+      expect(box.menuStartX).toBeGreaterThanOrEqual(box.brandRight)
+
+      // An activity replaces the Workspace columns, which unloads the sidebar
+      // and everything it published. The brand stays in the caption, so the
+      // menus must keep starting after it instead of falling back over it.
+      await page.getByRole('navigation', { name: 'Activity bar' })
+        .getByRole('button', { name: 'Plugins', exact: true }).click()
+      await page.locator('[data-plugin-panel]').waitFor()
+      const activity = await geometry(page)
+      expect(activity.brandTop).toBe(0)
+      expect(activity.menuStartX).toBeGreaterThanOrEqual(activity.brandRight)
+      expect(activity.captionControlsStart).not.toBe('')
+
+      // Back on the Workspace activity the reservation is unchanged.
+      await page.getByRole('navigation', { name: 'Activity bar' })
+        .getByRole('button', { name: 'Workspace', exact: true }).click()
+      await page.locator('[data-plugin-panel]').waitFor({ state: 'detached' })
+      const workspace = await geometry(page)
+      expect(workspace.menuStartX).toBeGreaterThanOrEqual(workspace.brandRight)
       expect(console.pageErrors).toEqual([])
     } finally {
       await browser.close()

@@ -162,19 +162,18 @@ export function SidebarRoot({
   }, [pointerInside])
 
   const darwinDesktop = isDarwinDesktop()
-  // Windows caption: the brand occupies the caption's first line (FrameBrand
-  // publishes its right edge as `--dsh-windows-brand-end`), so the caption
-  // controls start there and the native menus start after them. Only the
-  // collapsed state keeps controls in the caption — the expand button and New
-  // Session (28px + 8px each).
+  // Windows caption: FrameBrand owns the caption insets (it publishes the brand's
+  // edge for `--dsh-windows-caption-controls-start` and reserves that edge for
+  // the native menus). The sidebar only declares how much room its own caption
+  // controls need, and releases it when the column unloads for an activity.
   useLayoutEffect(() => {
     if (!windowsTitlebar) return
     const root = document.documentElement
-    root.style.setProperty('--dsh-windows-caption-controls-start', 'var(--dsh-windows-brand-end, 180px)')
-    root.style.setProperty('--dsh-windows-menu-start', `calc(var(--dsh-windows-caption-controls-start, 180px) + ${collapsed ? 72 : 0}px)`)
+    // The collapsed caption carries the expand button and New Session
+    // (28px + 8px each); the expanded column shows them inside its own row.
+    root.style.setProperty('--dsh-windows-caption-controls-width', collapsed ? '72px' : '0px')
     return () => {
-      root.style.removeProperty('--dsh-windows-caption-controls-start')
-      root.style.removeProperty('--dsh-windows-menu-start')
+      root.style.removeProperty('--dsh-windows-caption-controls-width')
     }
   }, [windowsTitlebar, collapsed])
   // Rail resting state is the panel icon; expanded it is the same glyph.

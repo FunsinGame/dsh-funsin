@@ -51,7 +51,13 @@ export function FrameBrand({ renderSlot, t }: FrameBrandProps) {
     if (element === null) return undefined
     const publish = (): void => {
       const end = Math.round(element.getBoundingClientRect().right) + 8
-      document.documentElement.style.setProperty('--dsh-windows-brand-end', `${end}px`)
+      const root = document.documentElement.style
+      root.setProperty('--dsh-windows-brand-end', `${end}px`)
+      // The caption controls start at the brand's edge. The sidebar adds its own
+      // width through `--dsh-windows-caption-controls-width` only while it holds
+      // caption controls; an activity that replaces the columns unloads them.
+      root.setProperty('--dsh-windows-caption-controls-start', `${end}px`)
+      root.setProperty('--dsh-windows-menu-start', `calc(${end}px + var(--dsh-windows-caption-controls-width, 0px))`)
     }
     // The wordmark's width follows the locale, the brand occupant, and the
     // build badge, so it is measured rather than reserved.
@@ -60,7 +66,10 @@ export function FrameBrand({ renderSlot, t }: FrameBrandProps) {
     observer.observe(element)
     return () => {
       observer.disconnect()
-      document.documentElement.style.removeProperty('--dsh-windows-brand-end')
+      const root = document.documentElement.style
+      root.removeProperty('--dsh-windows-brand-end')
+      root.removeProperty('--dsh-windows-caption-controls-start')
+      root.removeProperty('--dsh-windows-menu-start')
     }
   }, [windowsTitlebar])
   return (

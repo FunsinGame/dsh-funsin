@@ -45,7 +45,7 @@ dsh Web 客户端的侧边栏让用户识别当前构建、启动新会话、将
 
 实时收起时，展开内容在当前宽度淡出，上方控件共用同一段透明度渐变，并向左平移进入 56px 轨道，由布局的栏滑动结束整段动画。页面初始即为收起状态时会静态渲染轨道；减少动态效果模式会禁用两段过渡。固定在底部的 `sidebar.settings` 控件共用相同的透明度渐变时序，但不发生横向位移。
 
-在 Windows Electron 中，`html[data-windows-titlebar]` 把字标放回窗口顶栏自身那一行、位于 Desktop 菜单左侧：FrameBrand 以固定定位覆盖顶栏（框架品牌区带在此时折叠为零高），并发布 `--dsh-windows-brand-end`，顶栏控件与原生菜单从该位置开始。侧栏顶部行只保留开关。侧栏开关在展开态隐藏，仅在收起态以“展开”控件的形式回到顶栏，新建会话紧随其后、排在菜单之前。此时品牌是拖拽面而不是新建会话快捷入口，新建会话由专用按钮负责。由于字标宽度取决于语言、品牌占位者与构建徽标，FrameBrand 会测量自身并在根元素上发布 `--dsh-windows-brand-end`；侧栏据此发布 `--dsh-windows-caption-controls-start` 与 `--dsh-windows-menu-start`（同一左边缘，仅在收起态再加上展开控件与新建会话）。Desktop preload 用后者定位菜单，默认值为 48px。顶栏图标按钮采用紧凑控件圆角的 28px 控件，图标为居中 16px，并从窗口拖拽区域中排除。展开控件与新建会话的悬停提示在顶栏下方展开，Desktop 菜单文字不会盖住它们；占用 `sidebar.toggle.badge` 的控件自行决定气泡展开方向。从展开态收起使用键盘命令（`sidebar.left.toggle`）；`sidebar.toggle.badge` 槽位只在收起态的顶栏控件内渲染。
+在 Windows Electron 中，`html[data-windows-titlebar]` 把字标放回窗口顶栏自身那一行、位于 Desktop 菜单左侧：FrameBrand 以固定定位覆盖顶栏（框架品牌区带在此时折叠为零高），并发布 `--dsh-windows-brand-end`，顶栏控件与原生菜单从该位置开始。侧栏顶部行只保留开关。侧栏开关在展开态隐藏，仅在收起态以“展开”控件的形式回到顶栏，新建会话紧随其后、排在菜单之前。此时品牌是拖拽面而不是新建会话快捷入口，新建会话由专用按钮负责。由于字标宽度取决于语言、品牌占位者与构建徽标，FrameBrand 会测量自身并在根元素上发布 `--dsh-windows-brand-end`、`--dsh-windows-caption-controls-start` 与 `--dsh-windows-menu-start`（品牌左边缘加上 `--dsh-windows-caption-controls-width`），因此替换工作区三列的活动也保持顶栏预留。侧栏只声明该控件宽度（展开态 0px、收起态 72px），并在卸载时释放。Desktop preload 用后者定位菜单，默认值为 48px。顶栏图标按钮采用紧凑控件圆角的 28px 控件，图标为居中 16px，并从窗口拖拽区域中排除。展开控件与新建会话的悬停提示在顶栏下方展开，Desktop 菜单文字不会盖住它们；占用 `sidebar.toggle.badge` 的控件自行决定气泡展开方向。从展开态收起使用键盘命令（`sidebar.left.toggle`）；`sidebar.toggle.badge` 槽位只在收起态的顶栏控件内渲染。
 
 ### macOS 桌面
 
