@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-20-workspace-tab-attention.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-20-workspace-tab-attention.md
+/agent-note-workspace-tab-attention:
+  en: 0767b374911188f8
+  zh: d3dd8e9c6feb254e
+/agent-note-workspace-tab-attention/problem:
+  en: 08303cf1e750542b
+  zh: 3c50791ab766261c
+/agent-note-workspace-tab-attention/decision:
+  en: 77390622fc2855ef
+  zh: d33219b403a1e678
+/agent-note-workspace-tab-attention/alternatives-considered:
+  en: cad13a4d28a57d50
+  zh: 6919bb0975acfd64
+/agent-note-workspace-tab-attention/consequences:
+  en: 7b9912b588b67f48
+  zh: 7e2e2ae544a9b328

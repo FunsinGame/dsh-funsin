@@ -11,6 +11,9 @@
  *   Session log.
  * - Dragging a tab writes the registry order through `insertBefore`, the same
  *   order every other surface reads.
+ * - Each tab carries its Workspace's attention after the title: a pending
+ *   request icon first, then a spinner while any of its Sessions runs, then a
+ *   green or red unread completion dot until the Workspace is entered.
  * - The trailing add control sits at the strip's right edge and raises this
  *   surface's own directory flow; a composition with no flow occupant shows
  *   no add control at all.
@@ -21,11 +24,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  IconCloseFillRegular, IconFolderCloseRegular, IconFolderOpenRegular, IconPlusOutlineRegular, Menu, Tooltip,
+  IconCloseFillRegular, IconFolderCloseRegular, IconFolderOpenRegular, IconPlusOutlineRegular,
+  IconQuestionOutlineRegular, IconWarningTriangleOutlineRegular, Menu, StateDot, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { workspaceDisplayTitle } from '@deepseek-ai/dsh-api-workspace-controller/default-workspace'
+import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { WorkspaceTabsProps } from '../contract/slots.ts'
+import type { WorkspaceTabAttentionState } from '../attention.ts'
 import { WorkspacePickFlow } from '../WorkspacePicker.tsx'
 import css from './WorkspaceTabs.module.css'
 
@@ -55,6 +61,59 @@ function tabHalf(event: { clientX: number; currentTarget: HTMLElement }): 'befor
 }
 
 /**
+ * Trailing marker on one tab: a pending interaction first, then run activity,
+ * then the unread-completion dot. The screen-reader label states the same
+ * condition the glyph shows.
+ * @param props.state - the Workspace's published attention.
+ * @param props.t - the tab strip's locale seat.
+ * @returns the marker element.
+ */
+function WorkspaceTabMarker({ state, t }: { state: WorkspaceTabAttentionState; t: WorkspaceTabsProps['t'] }) {
+  const hidden = (label: string) => <span className={css.visuallyHidden}>{label}</span>
+  switch (state) {
+    case 'approval':
+    case 'plan-review':
+      return (
+        <span className={clsx(css.attention, css.attentionWarning)} data-attention={state}>
+          <IconWarningTriangleOutlineRegular size={14} />
+          {hidden(t(state === 'approval' ? 'status.waitingApproval' : 'status.planReview'))}
+        </span>
+      )
+    case 'question':
+      return (
+        <span className={clsx(css.attention, css.attentionWarning)} data-attention="question">
+          <IconQuestionOutlineRegular size={14} />
+          {hidden(t('status.waitingAnswer'))}
+        </span>
+      )
+    case 'running':
+      return (
+        <span className={css.attention} data-attention="running">
+          <StateDot state="ongoing" size={12} />
+          {hidden(t('status.running'))}
+        </span>
+      )
+    case 'completed':
+      return (
+        <span className={css.attention} data-attention="completed">
+          <StateDot state="done" />
+          {hidden(t('status.completed'))}
+        </span>
+      )
+    case 'failed':
+      return (
+        <span className={css.attention} data-attention="failed">
+          <StateDot state="error" />
+          {hidden(t('status.failed'))}
+        </span>
+      )
+    /* v8 ignore next 2 -- closed WorkspaceTabAttentionState union */
+    default:
+      return assertNever(state)
+  }
+}
+
+/**
  * Render the Workspace tab strip.
  * @param props - `shell.workspace.tabs` owner share, the strip's directory-flow hole, injected actions, and the locale seat.
  * @returns the strip element tree.
@@ -63,6 +122,7 @@ export function WorkspaceTabs({
   useWorkspaces,
   useCurrentWorkspace,
   useWorkspaceShortcuts,
+  useWorkspaceAttention,
   useDirectoryFlow,
   selectWorkspace,
   reorderWorkspace,
@@ -80,6 +140,7 @@ export function WorkspaceTabs({
   const workspaces = useWorkspaces(state => state.items)
   const currentId = useCurrentWorkspace(id => id)
   const shortcutState = useWorkspaceShortcuts(state => state)
+  const attention = useWorkspaceAttention(state => state)
   // The resolved name, not `t`, is the memo dependency: the bound seat keeps
   // its identity across a language switch.
   const defaultWorkspaceName = t('workspace.defaultName')
@@ -155,6 +216,7 @@ export function WorkspaceTabs({
         {tabs.map((tab) => {
           const selected = tab.id === currentId
           const marker = drag?.over?.id === tab.id ? drag.over.half : null
+          const attentionState = attention.get(tab.id)
           return (
             <div
               key={tab.id}
@@ -207,6 +269,7 @@ export function WorkspaceTabs({
                 >
                   <IconFolderCloseRegular size={14} />
                   <span className={css.tabLabel}>{tab.title}</span>
+                  {attentionState !== undefined && <WorkspaceTabMarker state={attentionState} t={t} />}
                 </button>
               </Tooltip>
             </div>

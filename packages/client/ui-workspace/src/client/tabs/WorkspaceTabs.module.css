@@ -100,6 +100,28 @@
   text-overflow: ellipsis;
 }
 
+/* Trailing pending/run/completion marker after the tab title. */
+.attention {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
+
+/* A pending approval or answer asks the user to act; both read as warning. */
+.attentionWarning {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 /* Pinned to the strip's right edge: `margin-left: auto` keeps it outside the
    scrolled tab list. */
 .addButton {

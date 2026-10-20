@@ -49,6 +49,7 @@ import {
   type CurrentWorkspaceInjected,
 } from './contract/slots.ts'
 import { createWorkspaceShortcutControls, installWorkspaceShortcuts } from './shortcuts.ts'
+import { WorkspaceTabAttentionController } from './attention.ts'
 import { UiWorkspaceService } from './navigation.ts'
 import { createWorkspaceViewStore } from './stores.ts'
 import { WorkspaceBrowser } from './rows/WorkspaceBrowser.tsx'
@@ -66,6 +67,7 @@ import { WorkspaceStatusItem } from './status/WorkspaceStatusItem.tsx'
 import { en, zh, type WorkspaceKey } from './locales.ts'
 
 export type { StartSessionOptions, UiWorkspace } from './navigation.ts'
+export type { WorkspaceTabAttentionMap, WorkspaceTabAttentionState } from './attention.ts'
 export type {
   CurrentWorkspaceInjected, DirectoryFlowOwnerProps, DirectoryFlowSlotName, DirectoryPickingHooks,
   DirectoryPickingInjected, MenuOpenState, RowToast, SessionRenameTarget, SessionRowOwnerProps, UseMenuOpenState,
@@ -107,7 +109,7 @@ const NS = 'workspace'
  */
 export const inject = [
   'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'remote.session', 'layout',
-  'shortcuts', 'remoteAccess',
+  'shortcuts', 'remoteAccess', 'uiSession',
 ]
 
 /**
@@ -131,6 +133,14 @@ export function apply(ctx: Context): void {
   // The current-Workspace fact both browsing surfaces render: written by the
   // service at each navigation, read through each registration's bound hook.
   const currentWorkspace = createSnapshotStore<WorkspaceId | undefined>(undefined)
+  // Live tab markers follow Session status plus the current-Workspace
+  // acknowledgement rule; the strip only renders the published map.
+  const tabAttention = new WorkspaceTabAttentionController({
+    workspaces: workspaces.list,
+    sessionStatus: ctx.uiSession.sessionStatus,
+    currentWorkspace,
+  })
+  ctx.effect(() => () => { tabAttention.dispose() }, 'ui-workspace: tab attention')
   const uiWorkspace = new UiWorkspaceService(
     ctx, ctx.remote.directoryPicker, workspaces, sessions, viewInstance.actions, notify, currentWorkspace,
   )
@@ -317,6 +327,7 @@ export function apply(ctx: Context): void {
       currentWorkspace,
       directoryFlow: tabsFlowSource,
       workspaceShortcuts: shortcutControls.state,
+      workspaceAttention: tabAttention.source,
     },
   })
   const pickerInjected = (): WorkspacePickerInjected => ({

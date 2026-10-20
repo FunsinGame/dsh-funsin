@@ -7,6 +7,7 @@ import type {
 import { SessionForkError } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceId, WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { HostObservable, PropsRenderSlots, StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ShortcutCommand } from '@deepseek-ai/dsh-client-shortcuts/client'
@@ -151,6 +152,9 @@ async function bench() {
     refreshProjections: vi.fn(() => Promise.resolve()),
     fork,
   } as never)
+  // The tab strip follows the unified Session UI status the ui-session plugin publishes.
+  const sessionStatus = createSnapshotStore<SessionStatusSnapshot>(new Map())
+  ctx.provide('uiSession', { sessionStatus } as never)
   const pickDirectory = vi.fn(() => Promise.resolve({ ok: true as const, value: '/projects/picked' }))
   const directoryPicker = { pick: pickDirectory }
   // The Session Remote's verified-host-path opener, which the tab menu drives.
@@ -174,6 +178,7 @@ async function bench() {
     canOpenWorkspacePath, openWorkspacePath,
     setWorkspaces: (snapshot: WorkspaceSnapshot): void => { workspaceSnapshot = snapshot },
     setSessions: (snapshot: SessionListState): void => { sessionSnapshot = snapshot },
+    setSessionStatus: (statuses: SessionStatusSnapshot): void => { sessionStatus.set(statuses) },
   }
 }
 
@@ -227,7 +232,7 @@ describe('ui-workspace apply', () => {
   it('declares the services it drives', () => {
     expect(inject).toEqual([
       'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'remote.session', 'layout',
-      'shortcuts', 'remoteAccess',
+      'shortcuts', 'remoteAccess', 'uiSession',
     ])
   })
 
@@ -857,6 +862,31 @@ describe('ui-workspace apply', () => {
     const picker = faceOf(b.slots.entries('conversation.hero.workspace')[0]!) as WorkspacePickerInjected
     await picker.createWorkspace({ path: '/tmp/picker-project' })
     expect(b.create).toHaveBeenCalledWith({ path: '/tmp/picker-project' })
+  })
+
+  it('publishes tab attention from the Session status and the Workspace membership', async () => {
+    const b = await bench()
+    b.setWorkspaces(workspaceState([
+      workspace('alpha', ['one']), workspace('beta', ['two']), workspace('gamma', ['three']),
+    ]))
+    declare(b.slots, 'shell.workspace.tabs')
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const tabs = faceOf(b.slots.entries('shell.workspace.tabs')[0]!) as WorkspaceTabsInjected
+    const attention = tabs.hooks.workspaceAttention
+
+    b.setSessionStatus(new Map([
+      [sid('one'), { running: true, pendingInteraction: undefined, completionUnread: false, completionFailed: false }],
+      [sid('two'), { running: false, pendingInteraction: undefined, completionUnread: true, completionFailed: true }],
+      [sid('three'), {
+        running: false,
+        pendingInteraction: { key: 'question-1', kind: 'question', sessionId: sid('three') } as never,
+        completionUnread: false,
+        completionFailed: false,
+      }],
+    ]))
+    expect(attention.getSnapshot()).toEqual(new Map([
+      ['alpha', 'running'], ['beta', 'failed'], ['gamma', 'question'],
+    ]))
   })
 
   it('declares the tab strip flow hole and reports its occupancy', async () => {

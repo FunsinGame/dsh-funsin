@@ -54,6 +54,7 @@ import type { SessionActivity, WorkspaceId, WorkspaceView } from '@deepseek-ai/d
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { WorkspaceShortcutState } from '../shortcuts.ts'
+import type { WorkspaceTabAttentionMap } from '../attention.ts'
 import type {} from './toast.ts'
 import type { createWorkspaceViewStore } from '../stores.ts'
 
@@ -235,6 +236,12 @@ export type WorkspaceTabsInjected = DirectoryPickingInjected & CurrentWorkspaceI
   hooks: DirectoryPickingInjected['hooks'] & CurrentWorkspaceInjected['hooks'] & {
     /** Command-raised requests (the add command) the strip consumes. */
     workspaceShortcuts: HostObservable<WorkspaceShortcutState>
+    /**
+     * Per-Workspace run activity and unread completions the strip marks after
+     * each tab's title: a spinner while a Session runs, then a green (completed)
+     * or red (failed) dot until the Workspace is entered.
+     */
+    workspaceAttention: HostObservable<WorkspaceTabAttentionMap>
   }
   /** Make a Workspace current: its most recent Session, or a blank one. */
   selectWorkspace: (workspaceId: WorkspaceId) => void

@@ -6,6 +6,7 @@ import { allowAllAccess, bindSnapshotSelector, makeTranslate } from '@deepseek-a
 import type { WorkspaceId, WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { DirectoryFlowOwnerProps, WorkspaceTabsProps } from '../src/client/contract/slots.ts'
+import type { WorkspaceTabAttentionMap } from '../src/client/attention.ts'
 import { createWorkspaceShortcutControls } from '../src/client/shortcuts.ts'
 import { WorkspaceTabs } from '../src/client/tabs/WorkspaceTabs.tsx'
 import { zh } from '../src/client/locales.ts'
@@ -64,6 +65,7 @@ function mount(overrides: Partial<WorkspaceTabsProps> = {}) {
     useWorkspaces: hook(workspaceState([])),
     useCurrentWorkspace: hook<WorkspaceId | undefined>(undefined),
     useWorkspaceShortcuts: bindSnapshotSelector(controls.state),
+    useWorkspaceAttention: hook<WorkspaceTabAttentionMap>(new Map()),
     useDirectoryFlow: bindSnapshotSelector({ getSnapshot: () => true, subscribe: () => () => {} }),
     useSessions: hook({ ids: [], byId: {}, phase: 'ready', projectionsBySession: {} }),
     useSessionStatus: hook(new Map()),
@@ -99,6 +101,57 @@ describe('WorkspaceTabs', () => {
     expect(tabs[0]!.getAttribute('aria-selected')).toBe('false')
     expect(tabs[1]!.getAttribute('aria-selected')).toBe('true')
     expect(screen.getByRole('tablist').getAttribute('aria-label')).toBe('工作区页签')
+  })
+
+  it('marks a running Workspace with a spinner after its title', () => {
+    mount({
+      useWorkspaces: hook(workspaceState([workspace('alpha'), workspace('beta')])),
+      useCurrentWorkspace: hook<WorkspaceId | undefined>(wid('alpha')),
+      useWorkspaceAttention: hook<WorkspaceTabAttentionMap>(new Map([[wid('beta'), 'running']])),
+    })
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs[0]!.querySelector('[data-state="ongoing"]')).toBeNull()
+    expect(tabs[1]!.querySelector('[data-state="ongoing"]')).not.toBeNull()
+    expect(tabs[1]!.textContent).toContain('进行中')
+  })
+
+  it('marks a finished Workspace green, a failed one red, and leaves the rest unmarked', () => {
+    mount({
+      useWorkspaces: hook(workspaceState([
+        workspace('alpha'), workspace('beta'), workspace('gamma'),
+      ])),
+      useCurrentWorkspace: hook<WorkspaceId | undefined>(wid('gamma')),
+      useWorkspaceAttention: hook<WorkspaceTabAttentionMap>(new Map([
+        [wid('alpha'), 'completed'],
+        [wid('beta'), 'failed'],
+      ])),
+    })
+    const [alpha, beta, gamma] = screen.getAllByRole('tab')
+    expect(alpha!.querySelector('[data-state="done"]')).not.toBeNull()
+    expect(alpha!.textContent).toContain('已完成')
+    expect(beta!.querySelector('[data-state="error"]')).not.toBeNull()
+    expect(beta!.textContent).toContain('执行失败')
+    expect(gamma!.querySelector('[data-state]')).toBeNull()
+  })
+
+  it('marks a pending approval or plan review with a warning and an answer with a question', () => {
+    mount({
+      useWorkspaces: hook(workspaceState([
+        workspace('alpha'), workspace('beta'), workspace('gamma'),
+      ])),
+      useWorkspaceAttention: hook<WorkspaceTabAttentionMap>(new Map([
+        [wid('alpha'), 'approval'],
+        [wid('beta'), 'plan-review'],
+        [wid('gamma'), 'question'],
+      ])),
+    })
+    const [alpha, beta, gamma] = screen.getAllByRole('tab')
+    expect(alpha!.querySelector('[data-attention="approval"] svg')).not.toBeNull()
+    expect(alpha!.textContent).toContain('等待审批')
+    expect(beta!.querySelector('[data-attention="plan-review"] svg')).not.toBeNull()
+    expect(beta!.textContent).toContain('计划待审')
+    expect(gamma!.querySelector('[data-attention="question"] svg')).not.toBeNull()
+    expect(gamma!.textContent).toContain('等待回答')
   })
 
   it('selects a Workspace on click and leaves the current one alone', () => {

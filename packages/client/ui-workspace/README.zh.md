@@ -11,7 +11,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包让用户通过横跨窗口顶部的页签条切换与管理 Workspace、浏览当前 Workspace 的 Session、为新 Session 选择 Workspace，并通过重命名、重排序、搜索、fork 与归档来管理 Session；Session 行菜单及其悬停按钮是可由客户端插件扩展的 slot 列表。待处理交互显示为警告点，subagent 来源的 Session 则保持隐藏。处于空闲状态且未归档、其 Session 有活动定时任务的 Session 行会显示时钟标记，其悬浮卡片会列出这些任务。规范化后仍有差异的文件夹路径会保留为独立 Workspace。添加 Workspace 需要组合目录选择器；没有目录选择器时，添加操作不可用。
+本包让用户通过横跨窗口顶部的页签条切换与管理 Workspace、浏览当前 Workspace 的 Session、为新 Session 选择 Workspace，并通过重命名、重排序、搜索、fork 与归档来管理 Session；Session 行菜单及其悬停按钮是可由客户端插件扩展的 slot 列表。待处理交互显示为警告点，subagent 来源的 Session 则保持隐藏。页签会在标题后标记该 Workspace 等待用户处理的事项：需要权限或计划待审时显示警告图标，需要回答时显示问号图标；没有待处理事项时标记运行与新完成情况：运行中的转圈，随后是绿色或红色的完成点，直到进入该 Workspace。处于空闲状态且未归档、其 Session 有活动定时任务的 Session 行会显示时钟标记，其悬浮卡片会列出这些任务。规范化后仍有差异的文件夹路径会保留为独立 Workspace。添加 Workspace 需要组合目录选择器；没有目录选择器时，添加操作不可用。
 
 ## 目录
 
@@ -42,6 +42,8 @@ kind: "package-reference"
 ### 工作区页签
 
 横跨整个窗口的页签条是唯一的 Workspace 清单。**添加工作区**注册目录后把该 Workspace 设为当前，并打开它最近的 Session，没有可打开的会话时连接一个空白 Session。点击页签同样把该 Workspace 设为当前；当前 Workspace 跟随主视图的 Session，因此从搜索或会话行打开的 Session 会带动页签切换，注册项消失时回退到第一个已注册 Workspace。页签菜单提供**打开资源管理器**与**关闭**。前者仅在 Host 表明可以把目录交给桌面时出现（无桌面的远程浏览器 Host 不显示），并经由 Session Remote 的已验证 Host 路径打开器执行，由资源管理器、访达或 Linux 默认文件管理器打开该 Workspace 目录本身；被拒绝的手势通过 Workspace 通知通道显示 Host 的原文。**关闭**删除注册记录，目录与全部会话日志保留，同一目录可再次添加。Workspace 标题来自控制器的显示标题，仍保留自动标题的 Workspace 会跟随读者语言。页签在条带内横向滚动，添加控件固定在右端。Workspace 重命名位于侧栏区头自己的菜单，对话框以存储标题预填。
+
+页签还会在标题后携带该 Workspace 的待处理事项与运行提示。等待用户处理的 Session 优先于其他标记：需要审批或计划待审时显示黄色警告三角，需要回答时显示问号；这些标记在当前 Workspace 中同样显示，因为它们需要用户操作；多个 Session 同时等待时，审批优先于计划待审，计划待审优先于待回答。没有待处理事项时，只要其中任一 Session 正在运行，标记就是共享的 ongoing 转圈；运行结束之后，标记变为绿色的完成点或红色的失败点。待处理交互与正在运行都优先于更早的完成点。进入该 Workspace——点击其页签、打开其中某个 Session，或任何使其成为当前 Workspace 的导航——会确认其未读完成；离开的 Workspace 也会确认自身的完成，因此用户本就在其中时结束的运行不会在之后冒出圆点。该标记是 Session 域的事实：侧边栏行仍保留自己独立的绿色完成提醒，页签的确认不会清除它。
 
 没有任何 Workspace 记账的 Session（例如其页签被关闭之后）仍可通过搜索触达：搜索始终覆盖整个注册表，并在每条结果上标注所属 Workspace；侧边栏不再列出它们。
 
@@ -89,7 +91,7 @@ Workspace 和 Session 的启动基线均就绪后，空安装环境调用 `works
 <details>
 <summary>实现细节——点击展开</summary>
 
-本包是一条组合：四个目标 slot（`shell.workspace.tabs`、`shell.statusbar.left`、`sidebar.workspaces`、`conversation.hero.workspace`）都由其他插件声明，因此 `apply` 使用 `slots.inject()` 在各自的声明生命周期内完成注册，并在目标 slot 的声明恢复后重新注册。状态栏条目渲染当前工作区名称，数据来自页签条切换时写入的同一个已发布 `currentWorkspace` 源，因此两个界面指向同一个工作区，切换页签即更新状态栏，无需任何状态栏自身状态。
+本包是一条组合：四个目标 slot（`shell.workspace.tabs`、`shell.statusbar.left`、`sidebar.workspaces`、`conversation.hero.workspace`）都由其他插件声明，因此 `apply` 使用 `slots.inject()` 在各自的声明生命周期内完成注册，并在目标 slot 的声明恢复后重新注册。状态栏条目渲染当前工作区名称，数据来自页签条切换时写入的同一个已发布 `currentWorkspace` 源，因此两个界面指向同一个工作区，切换页签即更新状态栏，无需任何状态栏自身状态。页签尾部的标记来自 `apply` 中创建的 `WorkspaceTabAttentionController`：它跟随 `uiSession` 的状态源与 Workspace 快照，通过页签注册的 `hooks` 隔间发布一张注意力映射，并把 Workspace 级别的确认集合与 Session 级别的完成提醒分开保存。
 
 浏览器入口还为每个 Session 行声明两个 root 作用域的 `list` 子 slot：`sidebar.session.row.leading` 仅在该行主状态为 idle 时渲染、归档行留空，`sidebar.session.row.hover` 仅在该行的悬浮卡片打开时挂载。两者只接收行的 Session 身份，占用方据此读取自己的数据；Session 作用域的 slot 会强制建立 Session 绑定，从而激活并保留列表中每个 Session。
 
