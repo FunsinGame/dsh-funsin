@@ -986,13 +986,14 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
     const createdBody = await createdResponse.json() as { result: { ok: boolean; value: { sessionId: string } } }
     expect(createdBody.result.ok).toBe(true)
     const createdSessionId = createdBody.result.value.sessionId
-    expect(previousParentSessionIds).not.toContain(createdSessionId)
+    // The folder Workspace's New Session is its existing blank, reopened.
+    expect(previousParentSessionIds).toContain(createdSessionId)
     await page.locator(`[data-conversation-session="${createdSessionId}"]`).waitFor()
     await expect.poll(() => section.locator('[aria-selected="true"]').evaluate(row =>
       row.closest('[class*="groupSection"]')?.querySelector('[role="treeitem"]')?.textContent,
     ), { timeout: 10_000 }).toBe('folder-group')
-    await expect.poll(() => parentWorkspace.sessionIds).toHaveLength(previousParentSessionIds.length + 1)
-    expect(parentWorkspace.sessionIds).toEqual(expect.arrayContaining([...previousParentSessionIds, createdSessionId]))
+    await expect.poll(() => parentWorkspace.sessionIds).toHaveLength(previousParentSessionIds.length)
+    expect([...parentWorkspace.sessionIds]).toEqual(previousParentSessionIds)
     expect([...childWorkspace.sessionIds]).toEqual(childSessionIds)
     expect(tripwire.pageErrors).toEqual([])
   })
@@ -1006,7 +1007,7 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
 })
 
 describe('web e2e: New Session after an outdated blank cache', () => {
-  it('opens a fresh conversation instead of reusing the recorded conversation', async () => {
+  it('reopens the fresh New Session after the recorded one is declined', async () => {
     const scaffold = await launchWebScaffold({})
     let browser: Browser | undefined
     try {
@@ -1034,18 +1035,27 @@ describe('web e2e: New Session after an outdated blank cache', () => {
       // candidate; the Host declines the started Session and creates a blank one.
       await expect.poll(() => selected.innerText()).toBe('New Session')
       await expect.poll(() => workspace.sessionIds.length).toBe(2)
+      const composer = page.locator('[data-composer-input][contenteditable="true"]')
+      await composer.waitFor({ timeout: 15_000 })
+      await composer.fill('unsent draft for the new session')
       // The declined Session's projections are reloaded, so its stale blank row reappears.
       await page.getByRole('treeitem', { name: /^Use the read tool twice/ }).click()
       await page.getByRole('tab', { name: 'Chat', exact: true }).waitFor()
       await expect.poll(() => selected.innerText()).not.toBe('New Session')
+      await expect.poll(() => composer.textContent(), { timeout: 10_000 }).toBe('')
       const previous = (await selected.innerText()).split('\n')[0]!
+      // The blank startup created stays listed while another Session is open.
+      expect(await page.getByRole('treeitem', { name: 'New Session', exact: true }).count()).toBe(1)
+      // Leave the clicked row so its hover actions do not enter the golden.
+      await page.mouse.move(0, 0)
       const before = await captureStableAria(page, '[role="tree"]', scaffold.workspaceCwd)
 
       await page.getByRole('button', { name: 'New session', exact: true }).last().click()
       await expect.poll(() => selected.innerText()).toBe('New Session')
       await page.getByRole('tab', { name: 'Chat', exact: true }).waitFor({ state: 'hidden' })
-      // New Session creates a fresh Session; the blank startup created stays a member.
-      await expect.poll(() => workspace.sessionIds.length).toBe(3)
+      await expect.poll(() => composer.textContent(), { timeout: 10_000 }).toBe('unsent draft for the new session')
+      // New Session reopens that blank instead of minting another one.
+      await expect.poll(() => workspace.sessionIds.length).toBe(2)
       expect(workspace.sessionIds).toContain(id)
       await page.getByRole('treeitem').filter({ hasText: previous }).waitFor()
       const after = await captureStableAria(page, '[role="tree"]', scaffold.workspaceCwd)

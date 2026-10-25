@@ -261,13 +261,13 @@ export class ApiSessionAgentController {
   /**
    * Create a Session for a new conversation, reusing the named blank Session
    * while it is still reusable. A reused Session runs the requested preset, or
-   * the configured default when the request names none; the preset it recorded
-   * is not resolved, and a change is logged as `agent-preset/selected` before
-   * the Agent is published. A named Session that has started a turn, fails the
-   * caller's placement rule, or is written by another owner stays unchanged,
-   * and a new Session is created instead. Requests naming one identity run in
-   * arrival order, including their preset resolution, and check the named
-   * Session's directory and ownership before resolving the preset.
+   * the configured default when the request names none. A composition that
+   * differs from the requested preset's current definition is rebuilt and
+   * logged as `agent-preset/selected`. A named Session that has started a turn,
+   * fails the caller's placement rule, or is written by another owner stays
+   * unchanged, and a new Session is created instead. Requests naming one
+   * identity run in arrival order, including their preset resolution, and check
+   * the named Session's directory and ownership before resolving the preset.
    * @param request - optional Session to reuse, directory, preset, and placement rule.
    * @returns the reused or created Session and the preset it ran when this request finished.
    * @throws ApiSessionCwdConflict when the named Session belongs to another directory.
@@ -506,7 +506,10 @@ export class ApiSessionAgentController {
     }
   }
 
-  /** @returns the live blank Session under the requested preset, or undefined when it cannot be reused. */
+  /**
+   * @returns the live blank Session with the requested preset's current
+   * definition, or undefined when it cannot be reused.
+   */
   private async reuseLive(
     live: Agent,
     request: ApiSessionCreateRequest,
@@ -514,10 +517,12 @@ export class ApiSessionAgentController {
   ): Promise<Agent | undefined> {
     if (!request.reusable(live.id) || !this.isBlank(live.session)) return undefined
     this.assertPresetApplicable(live.id, request.agentPreset)
-    const current = this.presetForSession(live.session)
     const presets = this.ctx.get('agentPresets')
     const target = composition.agentPreset
-    if (presets === undefined || target === undefined || target === current) return live
+    if (presets === undefined || target === undefined) return live
+    // Select even when the identity matches: a registered definition can
+    // change without changing its id, and the old composition must not outlive
+    // the blank's first turn.
     try {
       await presets.select(live, target)
     } catch (error: unknown) {

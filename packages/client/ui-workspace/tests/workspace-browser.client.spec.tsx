@@ -205,11 +205,26 @@ describe('WorkspaceBrowser', () => {
     })
   })
 
-  it('leads the list with the selected blank Session', () => {
+  it('leads the list with the selected New Session', () => {
     const blank = summary('blank', 5, { blank: true })
     mountWorkspace([summary('one', 4), blank], { main: blank.id })
     expect(rowTexts()[0]).toContain('新会话')
     expect(rowTexts()[1]).toContain('one')
+  })
+
+  it('keeps the New Session row and its draft route when another Session is selected', () => {
+    const blank = summary('blank', 5, { blank: true })
+    const real = summary('one', 4)
+    mountWorkspace([real, blank], { main: real.id })
+    expect(rowTexts()[0]).toContain('新会话')
+    expect(rowTexts()[1]).toContain('one')
+  })
+
+  it('shows one New Session row when legacy blank duplicates remain', () => {
+    const first = summary('blank-first', 6, { blank: true })
+    const second = summary('blank-second', 5, { blank: true })
+    mountWorkspace([second, first, summary('one', 4)])
+    expect(rowTexts().filter(text => text?.includes('新会话'))).toHaveLength(1)
   })
 
   it('shows five rows and reveals the rest on Show more, then folds them back', () => {

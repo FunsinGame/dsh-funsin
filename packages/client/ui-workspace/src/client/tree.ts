@@ -22,12 +22,36 @@ function mainSessionId(list: SessionListState): SessionId | undefined {
     .find(session => (session.retainedBy.mainView ?? 0) > 0)?.id
 }
 
+/**
+ * Resolve the Workspace's one New Session row: the selected blank while it
+ * belongs to the list, otherwise the first blank member in Session-list order.
+ * Remaining blanks are legacy duplicates and stay hidden.
+ * @param list - Session metadata authority.
+ * @param sessionIds - Workspace membership, including hidden members.
+ * @param current - selected main Session, or undefined.
+ * @param archivedSessionIds - registry-global archive set.
+ * @returns the blank Session the list shows and the New Session action reuses.
+ */
+export function newSessionId(
+  list: SessionListState,
+  sessionIds: readonly SessionId[],
+  current: SessionId | undefined,
+  archivedSessionIds: readonly SessionId[],
+): SessionId | undefined {
+  const members = new Set(sessionIds)
+  const archived = new Set(archivedSessionIds)
+  const eligible = (id: SessionId): boolean =>
+    members.has(id) && !archived.has(id) && list.byId[id]?.blank === true
+  if (current !== undefined && eligible(current)) return current
+  return list.ids.find(eligible)
+}
+
 /** One session row in the current Workspace's list or in search results. */
 export interface SessionNode {
   id: SessionId
   /** Stored title, or empty; the renderer localizes blank and unnamed row labels. */
   title: string
-  /** The provisional blank session (renderer shows the localized New Session title). */
+  /** The Workspace's provisional New Session (renderer shows its localized title). */
   blank: boolean
   /** A Session-scoped UI consumer is awaiting this user. */
   pendingInteraction?: SessionPendingInteractionStatus
@@ -156,17 +180,17 @@ export function reconcileManualOrder(
 }
 
 /**
- * Keep the selected provisional New Session ahead of either base order.
+ * Keep the provisional New Session ahead of either base order.
  * @param order - recency or reconciled manual order.
- * @param currentBlank - selected blank Session in this account, when present.
- * @returns a copy with the selected blank first and no duplicate slot.
+ * @param newSession - blank Session this account shows, when present.
+ * @returns a copy with the New Session first and no duplicate slot.
  */
-export function pinCurrentBlank(
+export function pinNewSession(
   order: readonly SessionId[],
-  currentBlank: SessionId | undefined,
+  newSession: SessionId | undefined,
 ): SessionId[] {
-  if (currentBlank === undefined) return [...order]
-  return [currentBlank, ...order.filter(id => id !== currentBlank)]
+  if (newSession === undefined) return [...order]
+  return [newSession, ...order.filter(id => id !== newSession)]
 }
 
 /**
@@ -177,19 +201,19 @@ export function pinCurrentBlank(
 export type ArchivedFilter = 'default' | 'show' | 'only'
 
 /**
- * Ordinary sessions are visible; among blank sessions, only the current one
- * is visible. Subagent children use their parent header catalog; archived
- * sessions follow the archived filter, while their accounting slots remain
- * either way so unarchiving restores position.
+ * Ordinary sessions are visible; among blank sessions, only the Workspace's
+ * one New Session is visible. Subagent children use their parent header
+ * catalog; archived sessions follow the archived filter, while their
+ * accounting slots remain either way so unarchiving restores position.
  */
 function sessionVisible(
   session: SessionSummary,
-  current: SessionId | undefined,
+  newSession: SessionId | undefined,
   archived: ReadonlySet<SessionId>,
   archivedFilter: ArchivedFilter,
 ): boolean {
   if (session.origin === 'subagent') return false
-  if (session.blank && session.id !== current) return false
+  if (session.blank && session.id !== newSession) return false
   switch (archivedFilter) {
     case 'default':
       return !archived.has(session.id)
@@ -302,10 +326,10 @@ export function deriveFlat(
 ): SessionNode[] {
   const archived = new Set(rowState.archivedSessionIds)
   const pinned = new Set(rowState.pinnedSessionIds)
-  const current = mainSessionId(list)
+  const newSession = newSessionId(list, sessionIds, mainSessionId(list), rowState.archivedSessionIds)
   const members = sessionIds.flatMap((id) => {
     const session = list.byId[id]
-    return session !== undefined && sessionVisible(session, current, archived, rowState.archivedFilter)
+    return session !== undefined && sessionVisible(session, newSession, archived, rowState.archivedFilter)
       ? [session]
       : []
   })

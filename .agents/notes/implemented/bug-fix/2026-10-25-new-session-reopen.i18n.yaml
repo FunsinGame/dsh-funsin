@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-25-new-session-reopen.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-10-25-new-session-reopen.md
+/agent-note-new-session-reopens-the-workspace-s-blank:
+  en: f289a732b169418e
+  zh: 83f91ad1d3fc458d
+/agent-note-new-session-reopens-the-workspace-s-blank/problem:
+  en: ab3b983da4268c64
+  zh: 2d094f6ebf4d7132
+/agent-note-new-session-reopens-the-workspace-s-blank/decision:
+  en: 909c69d26e4319f5
+  zh: 17da4fa06e426e01
+/agent-note-new-session-reopens-the-workspace-s-blank/alternatives-considered:
+  en: 1f7bfa34212c3d54
+  zh: 51d5b6e532f013ec
+/agent-note-new-session-reopens-the-workspace-s-blank/consequences:
+  en: 50c83cc7cce97619
+  zh: 6b4da9dc305f7818
+/agent-note-new-session-reopens-the-workspace-s-blank/testing:
+  en: 250cff8f1c131a36
+  zh: 87d3b9f6e1dac6cf

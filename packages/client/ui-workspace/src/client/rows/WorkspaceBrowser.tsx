@@ -31,7 +31,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceBrowserProps } from '../contract/slots.ts'
 import type { ArchivedFilter, SessionNode, SessionOrderBy, SessionRowState } from '../tree.ts'
 import {
-  deriveFlat, deriveSearchResults, orderByRecency, pinCurrentBlank, reconcileManualOrder,
+  deriveFlat, deriveSearchResults, newSessionId, orderByRecency, pinNewSession, reconcileManualOrder,
 } from '../tree.ts'
 import { SearchResultItem, SessionNodeItem } from './Rows.tsx'
 import { AnimatedRows } from './AnimatedRows.tsx'
@@ -227,7 +227,7 @@ function sessionDragOrder(
   const targetIndex = next.indexOf(target.id)
   if (targetIndex === -1) return
   next.splice(targetIndex + (over.half === 'after' ? 1 : 0), 0, source.id)
-  return pinCurrentBlank(next, rows.find(row => row.blank)?.id)
+  return pinNewSession(next, rows.find(row => row.blank)?.id)
 }
 
 /** The scrolling Session list of the current Workspace; unmounting drops the watermarks. */
@@ -545,9 +545,6 @@ export function WorkspaceBrowser({
   const workspaceReady = workspacePhase === 'ready' && workspaceStreamState !== 'loading'
   const mainSessionId = Object.values(list.byId)
     .find(session => (session.retainedBy.mainView ?? 0) > 0)?.id
-  const currentBlank = mainSessionId !== undefined && list.byId[mainSessionId]?.blank === true
-    ? mainSessionId
-    : undefined
   const orderState = useMemo(
     () => ({ pinnedSessionIds, archivedSessionIds }),
     [archivedSessionIds, pinnedSessionIds],
@@ -561,6 +558,10 @@ export function WorkspaceBrowser({
     [currentWorkspace],
   )
   const accountKey = currentWorkspace?.workspaceId
+  const newSession = useMemo(
+    () => newSessionId(list, memberIds, mainSessionId, archivedSessionIds),
+    [archivedSessionIds, list, mainSessionId, memberIds],
+  )
   const orderedSessionIds = useMemo(() => {
     const baseOrder = orderBy === 'updated'
       ? orderByRecency(memberIds, list.byId)
@@ -570,11 +571,8 @@ export function WorkspaceBrowser({
         list.byId,
         orderState,
       )
-    return pinCurrentBlank(
-      baseOrder,
-      currentBlank !== undefined && memberIds.includes(currentBlank) ? currentBlank : undefined,
-    )
-  }, [accountKey, currentBlank, list.byId, memberIds, orderBy, orderState, sessionOrderByAccount])
+    return pinNewSession(baseOrder, newSession)
+  }, [accountKey, list.byId, memberIds, newSession, orderBy, orderState, sessionOrderByAccount])
   const activeSessionOrders = useMemo<Readonly<Record<string, readonly SessionId[]>>>(
     () => (accountKey === undefined ? {} : { [accountKey]: orderedSessionIds }),
     [accountKey, orderedSessionIds],
@@ -584,20 +582,20 @@ export function WorkspaceBrowser({
     actions.retainAccountKeys([accountKey])
   }, [accountKey, actions.retainAccountKeys])
   useEffect(() => {
-    if (list.phase !== 'ready' || !workspaceReady || orderBy !== 'manual' || currentBlank === undefined) return
+    if (list.phase !== 'ready' || !workspaceReady || orderBy !== 'manual' || newSession === undefined) return
     // A first prompt can end blank pinning before the Workspace baseline arrives.
     // Preserve saved members until that baseline can establish departures.
     const saved = accountKey === undefined ? [] : sessionOrderByAccount[accountKey] ?? []
-    if (orderedSessionIds[0] !== currentBlank || saved[0] === currentBlank) return
+    if (orderedSessionIds[0] !== newSession || saved[0] === newSession) return
     actions.syncSessionOrders({
       ...activeSessionOrders,
-      [accountKey ?? '']: [currentBlank, ...saved.filter(id => id !== currentBlank)],
+      [accountKey ?? '']: [newSession, ...saved.filter(id => id !== newSession)],
     })
   }, [
     actions.syncSessionOrders,
     accountKey,
     activeSessionOrders,
-    currentBlank,
+    newSession,
     list.phase,
     orderedSessionIds,
     orderBy,

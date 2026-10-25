@@ -746,16 +746,34 @@ describe('UiWorkspaceService', () => {
     expect(b.sessions.retain).not.toHaveBeenCalled()
   })
 
-  it('creates a fresh Agent on explicit New Session instead of reusing a mounted blank', async () => {
+  it('reopens the visible blank when another blank member is listed first', async () => {
+    const b = bench({
+      sessions: sessionState([
+        summary('earlier', { blank: true, cwd: '/w/a' }),
+        summary('selected', { blank: true, cwd: '/w/a' }),
+      ], 'pending'),
+      workspaces: workspaceState([workspace('a', [sid('earlier'), sid('selected')])]),
+    })
+    b.uiWorkspace.openSession(sid('selected'))
+    b.uiWorkspace.startSession(wid('a'))
+    await vi.waitFor(() => {
+      expect(b.sessions.create).toHaveBeenCalledExactlyOnceWith({
+        workspaceId: wid('a'), sessionId: sid('selected'),
+      })
+    })
+  })
+
+  it('reopens the Workspace New Session on explicit New Session instead of creating another blank', async () => {
     const b = bench({
       sessions: sessionState([summary('blank', { blank: true, cwd: '/w/a' })], 'pending'),
       workspaces: workspaceState([workspace('a', [sid('blank')])]),
     })
     b.uiWorkspace.startSession(wid('a'))
     await vi.waitFor(() => {
-      expect(b.sessions.create).toHaveBeenCalledExactlyOnceWith({ workspaceId: wid('a') })
+      expect(b.sessions.create).toHaveBeenCalledExactlyOnceWith({ workspaceId: wid('a'), sessionId: sid('blank') })
     })
-    await vi.waitFor(() => { expect(b.sessions.retain).toHaveBeenCalledWith(sid('created-a'), expect.anything()) })
+    await vi.waitFor(() => { expect(b.sessions.retain).toHaveBeenCalledWith(sid('blank'), expect.anything()) })
+    expect(b.sessions.create).toHaveBeenCalledOnce()
   })
 
   it('reports a refused explicit Session creation through the Workspace notice', async () => {

@@ -357,7 +357,7 @@ describe('web e2e: agent-preset selection', () => {
     await writeComposerDraft(page, composer, '')
   }, 90_000)
 
-  it('preserves the current mode while New Session uses the reset Standard default', async () => {
+  it('preserves the current mode while New Session resets the reusable blank to the Standard default', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-preset-disabled'))
     await expect.poll(() => livePreset(scaffold), { timeout: 15_000 }).toBe('standard')
 
@@ -384,10 +384,16 @@ describe('web e2e: agent-preset selection', () => {
     const creation = page.waitForResponse('**/api/session/create')
     await page.getByRole('button', { name: 'New session', exact: true }).last().click()
     const created = await creation
-    expect(created.request().postDataJSON()).not.toHaveProperty('payload.args.request.sessionId')
+    // The existing New Session is reopened rather than duplicated; the Host
+    // applies the current default preset to that blank.
+    const requestedSessionId = (created.request().postDataJSON() as {
+      payload: { args: { request: { sessionId: string } } }
+    }).payload.args.request.sessionId
+    expect(typeof requestedSessionId).toBe('string')
     const createdBody = await created.json() as { result: { value: { sessionId: SessionId; agentPreset: string } } }
     expect(createdBody).toMatchObject({ result: { ok: true, value: { agentPreset: 'standard' } } })
     const freshSessionId = createdBody.result.value.sessionId
+    expect(freshSessionId).toBe(requestedSessionId)
     const freshConversation = page.locator(`[data-conversation-session="${freshSessionId}"]`)
     await freshConversation.waitFor()
     await page.reload()

@@ -27,9 +27,9 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-用横跨窗口顶部的工作区页签切换、关闭、重排和添加 Workspace，用侧边栏浏览当前 Workspace 的 Session、重排它们并新建会话；在 Session Intent 主视觉区用选择器为新会话选择 Workspace。每个已注册 Workspace 一个页签，按 Host 持久化顺序排列，当前 Workspace 处于选中状态；左键点击把该 Workspace 设为当前，右键打开页签菜单（**打开资源管理器**与**关闭**；关闭仅删除注册记录，目录与全部会话日志保留），拖拽页签写入注册顺序，最右侧的**添加工作区**按钮拉起与空状态相同的目录选择流程。侧边栏只列出当前 Workspace 的 Session，因此切换页签或从搜索打开 Session 会带着列表一起切换。列表按顺序显示前面的 Session，直到水位线，水位线初始为五。水位线会升高，以覆盖前 50 条中最后一条正在运行、有子会话正在运行、等待用户、有未读完成提醒或在主视图中打开的 Session；从搜索打开的 Session 会把水位线升高到该 Session，无论其位置。水位线是一个行数，不会自行回落，因此运行或通知结束后这些行仍保持可见；重排若把某个 Session 移到水位线之后，该 Session 会被隐藏。每次点击**展开其余**将水位线升高五条，不受 50 行限制；剩余五条或更少时显示全部；**收起**把水位线重置到抬高后的基线。当前选中的空白**新会话**在首条提示词落地前是水位线之外的额外行。水位线不持久化；切换 Workspace 或卸载列表都会重置水位线。
+用横跨窗口顶部的工作区页签切换、关闭、重排和添加 Workspace，用侧边栏浏览当前 Workspace 的 Session、重排它们并新建会话；在 Session Intent 主视觉区用选择器为新会话选择 Workspace。每个已注册 Workspace 一个页签，按 Host 持久化顺序排列，当前 Workspace 处于选中状态；左键点击把该 Workspace 设为当前，右键打开页签菜单（**打开资源管理器**与**关闭**；关闭仅删除注册记录，目录与全部会话日志保留），拖拽页签写入注册顺序，最右侧的**添加工作区**按钮拉起与空状态相同的目录选择流程。侧边栏只列出当前 Workspace 的 Session，因此切换页签或从搜索打开 Session 会带着列表一起切换。列表按顺序显示前面的 Session，直到水位线，水位线初始为五。水位线会升高，以覆盖前 50 条中最后一条正在运行、有子会话正在运行、等待用户、有未读完成提醒或在主视图中打开的 Session；从搜索打开的 Session 会把水位线升高到该 Session，无论其位置。水位线是一个行数，不会自行回落，因此运行或通知结束后这些行仍保持可见；重排若把某个 Session 移到水位线之后，该 Session 会被隐藏。每次点击**展开其余**将水位线升高五条，不受 50 行限制；剩余五条或更少时显示全部；**收起**把水位线重置到抬高后的基线。每个 Workspace 最多保留一个空白**新会话**；打开其他 Session 时它仍留在列表中，在首条提示词落地前是水位线之外的额外行。水位线不持久化；切换 Workspace 或卸载列表都会重置水位线。
 
-未保存标题的历史会话显示本地化名称「未命名 / Untitled」，不使用目录名兜底。当前空会话仍显示「新会话」，其他空会话仍隐藏。重命名草稿使用已保存标题，无标题时留空；无标题行不提供标题复制。
+未保存标题的历史会话显示本地化名称「未命名 / Untitled」，不使用目录名兜底。该 Workspace 的唯一空会话在打开其他 Session 时仍显示「新会话」，历史遗留的重复空会话仍隐藏。重命名草稿使用已保存标题，无标题时留空；无标题行不提供标题复制。
 
 ### 重排序与视图选项
 
@@ -37,7 +37,7 @@ kind: "package-reference"
 
 置顶把 Session 移到完整保存序列的首位，但不切换所选模式。它在手动模式下排在置顶区最前，在最近更新模式下则不一定。取消置顶不改变保存的位置。拖拽置顶行或普通行都修改同一条完整序列并选择手动模式，隐藏的归档成员始终保留。缺失的置顶成员按置顶数组顺序补到头部。新增的普通 fork 在完整序列中插在来源之前，不继承置顶成员关系；可见置顶行仍排在普通行之前。其他缺失成员按最近更新时间追加，缺失归档项放在最后。补齐仅在内存中完成，直到一次 Session 顺序写入保存完整结果。单纯切换归档筛选既不改变保存的位置，也不改变成员关系。
 
-当前选中的空白**新会话**保留临时首位且无法拖拽；首条提示词落地后，它成为可拖拽的普通行，在手动排序中保留该位置，在最近更新中按当前时间戳排列。Session 显示顺序保存在浏览器本地并按 Workspace 记账，切换页签时各自保留已保存的位置。
+空白**新会话**保留临时首位且无法拖拽；首条提示词落地后，它成为可拖拽的普通行，在手动排序中保留该位置，在最近更新中按当前时间戳排列。Session 显示顺序保存在浏览器本地并按 Workspace 记账，切换页签时各自保留已保存的位置。
 
 ### 工作区页签
 
@@ -73,11 +73,11 @@ Session 行渲染运行时的实时 `pendingInteraction` 分类：审批显示**
 
 -----
 
-`ctx.uiWorkspace.openSession(target)` 会同步替换其拥有的 `mainView` reference，并让主区域返回 Conversation，而不等待 `reference.ready`，因此历史加载会显示在已经选中的 Session 视图内。目标可以是已知 Session id，也可以是持久的直接父子 subagent 地址；显式地址不要求预先加载 parent catalog。`openWorkspace(id, beforeOpen?, options?)` 仅在请求未被后续导航替代时打开工作区空白 Session；显式新会话操作会创建新的 Session。`forkSession(id)` 创建子会话，不导航，也不替代尚未完成的导航。可选的同步准备回调在目标被 retain 后执行，并且仅对仍有效的 Workspace 请求执行，因此过期请求不会搬移 composer 草稿。后续导航或 owner 释放会阻止晚到的 UI 提交，但不取消底层 Session 创建。启动恢复会 retain 主 reference，不改变已选面板，也不取消后续导航。归档主 Session 会释放其 reference 并清除主选择。选择失败时保留当前全局面板。Session 行读取 `usePanelInfo`，在全局面板活跃时不显示 Session 选中样式；仅把焦点移到搜索框或目录选择器不会离开该面板。
+`ctx.uiWorkspace.openSession(target)` 会同步替换其拥有的 `mainView` reference，并让主区域返回 Conversation，而不等待 `reference.ready`，因此历史加载会显示在已经选中的 Session 视图内。目标可以是已知 Session id，也可以是持久的直接父子 subagent 地址；显式地址不要求预先加载 parent catalog。`openWorkspace(id, beforeOpen?, options?)` 仅在请求未被后续导航替代时打开工作区空白 Session；显式新会话操作会重新打开该 Workspace 已有的新会话，仅当它没有新会话时才创建。`forkSession(id)` 创建子会话，不导航，也不替代尚未完成的导航。可选的同步准备回调在目标被 retain 后执行，并且仅对仍有效的 Workspace 请求执行，因此过期请求不会搬移 composer 草稿。后续导航或 owner 释放会阻止晚到的 UI 提交，但不取消底层 Session 创建。启动恢复会 retain 主 reference，不改变已选面板，也不取消后续导航。归档主 Session 会释放其 reference 并清除主选择。选择失败时保留当前全局面板。Session 行读取 `usePanelInfo`，在全局面板活跃时不显示 Session 选中样式；仅把焦点移到搜索框或目录选择器不会离开该面板。
 
 导航和启动恢复通过所选 Session 的 `follow` 获取投影，不会另行刷新该 Session 或其父会话的投影；例外是恢复已保存的空白会话时先重新加载该 Session 的投影，因为列表中的值是缓存提示，Host 非正常退出后可能落后于其日志。
 
-重新打开工作区和显式准备草稿向 Host 请求 Session 时指明列表中第一个符合条件的空白会话；启动恢复指明已保存的空白会话。Host 以请求的 preset 复用该空白会话，请求未指明 preset 时使用其默认 preset；若该空白会话已开始、已离开该工作区或写锁被其他写者占用，Host 改为新建 Session；导航打开 Host 返回的 Session，不再尝试其他空白会话。带草稿选项的 `startSession`、`openWorkspace` 和 `connectWorkspace` 接受 `{ agentPreset }`，供开始前已确定 preset 的流程使用，例如创造模式入口；一次连接仅在与该工作区最近一次进行中的连接请求相同 preset 时与之合并，因此最新的请求总会到达 Host。启动恢复传入已保存空白会话日志记录的 preset，使草稿保留该 preset；当 Host 报告该 preset 不存在（`agent-preset/not-found`）或无法激活（`agent-preset/invalid`）时，启动恢复改为不带 preset 再请求一次，草稿在 Host 默认 preset 下继续。其他错误会中止请求：显式新建会话或在 hero 中选择工作区时，失败以短暂提示展示，引用 Host 的错误码和消息（例如 preset 挂载失败），非 Host 拒绝的失败则显示其自身消息；已被后续导航或 owner 销毁取代的请求不弹提示，启动恢复仍只报告到控制台。已释放的空白会话被复用时保留 slash 命令状态。后续导航会取消尚未完成的启动选择。
+重新打开工作区、显式新建会话和显式准备草稿向 Host 请求 Session 时，指明该 Workspace 唯一的新会话——选中空白会话时优先使用它，否则使用列表顺序中第一个符合条件的空白会话；启动恢复指明已保存的空白会话。Host 以请求的 preset 复用该空白会话，请求未指明 preset 时使用其默认 preset；若该空白会话已开始、已离开该工作区或写锁被其他写者占用，Host 改为新建 Session；导航打开 Host 返回的 Session，不再尝试其他空白会话。带草稿选项的 `startSession`、`openWorkspace` 和 `connectWorkspace` 接受 `{ agentPreset }`，供开始前已确定 preset 的流程使用，例如创造模式入口；一次连接仅在与该工作区最近一次进行中的连接请求相同 preset 时与之合并，因此最新的请求总会到达 Host。启动恢复传入已保存空白会话日志记录的 preset，使草稿保留该 preset；当 Host 报告该 preset 不存在（`agent-preset/not-found`）或无法激活（`agent-preset/invalid`）时，启动恢复改为不带 preset 再请求一次，草稿在 Host 默认 preset 下继续。其他错误会中止请求：显式新建会话或在 hero 中选择工作区时，失败以短暂提示展示，引用 Host 的错误码和消息（例如 preset 挂载失败），非 Host 拒绝的失败则显示其自身消息；已被后续导航或 owner 销毁取代的请求不弹提示，启动恢复仍只报告到控制台。已释放的空白会话被复用时保留 slash 命令状态。后续导航会取消尚未完成的启动选择。
 
 Workspace 和 Session 的启动基线均就绪后，空安装环境调用 `workspaces.initializeDefault`，创建或复用其空白 Session。选中该 Session 后输入框才可编辑，不会自动提交消息。后续导航或所属上下文销毁会阻止启动流程选中其结果。不符合首次使用条件时仍可选择文件夹，不显示错误。默认工作区创建失败时显示短暂提示，引导用户通过“选择工作区”选择文件夹，直到下次启动才重试。Session 创建失败沿用普通的恢复错误处理。登记成功的工作区在 Session 创建或后续提交失败时仍然保留。
 
@@ -95,7 +95,7 @@ Workspace 和 Session 的启动基线均就绪后，空安装环境调用 `works
 
 浏览器入口还为每个 Session 行声明两个 root 作用域的 `list` 子 slot：`sidebar.session.row.leading` 仅在该行主状态为 idle 时渲染、归档行留空，`sidebar.session.row.hover` 仅在该行的悬浮卡片打开时挂载。两者只接收行的 Session 身份，占用方据此读取自己的数据；Session 作用域的 slot 会强制建立 Session 绑定，从而激活并保留列表中每个 Session。
 
-客户端调用方可以在 `uiWorkspace.startSession` 的第二参数中传入 `prompt` 与 `clearPreviousDraft`。提示词仅接受普通文字；结构化草稿由内部恢复和工作区携带流程处理。不清空时保留已有文字或附件；显式清空只替换目标 Session 的文字和内联引用，不删除附件。在异步创建前捕获选项值，在导航提交前应用到准确保留的 binding。已被后续操作取代的导航不写内容；输入处于提交阻塞状态时拒绝准备并保留原选择。不传选项时按当前 Agent 预设定义创建新的 Session。工作区重连和显式草稿准备仍可复用已有空 Session。[草稿初始化决策](../../../.agents/notes/implemented/architecture/2026-09-30-structured-draft-initialization.zh.md)说明输入 owner 的数据流。
+客户端调用方可以在 `uiWorkspace.startSession` 的第二参数中传入 `prompt` 与 `clearPreviousDraft`。提示词仅接受普通文字；结构化草稿由内部恢复和工作区携带流程处理。不清空时保留已有文字或附件；显式清空只替换目标 Session 的文字和内联引用，不删除附件。在异步创建前捕获选项值，在导航提交前应用到准确保留的 binding。已被后续操作取代的导航不写内容；输入处于提交阻塞状态时拒绝准备并保留原选择。不传选项时重新打开该 Workspace 的新会话；该 Workspace 没有新会话时，按当前 Agent 预设定义创建一个。重新打开的新会话会恢复其持久化的输入框草稿。工作区重连和显式草稿准备可复用同一个空白 Session。[草稿初始化决策](../../../.agents/notes/implemented/architecture/2026-09-30-structured-draft-initialization.zh.md)说明输入 owner 的数据流。
 
 ### 目录流子 slot
 
@@ -178,7 +178,7 @@ export function apply(ctx: Context): void {
 
 ### 视图状态
 
-Workspace 基线就绪后，浏览器持久化的 Session 顺序记录只保留当前 Workspace id。`WorkspaceView.sessionIds` 提供 Workspace 成员关系，但不提供 Session 显示顺序。视图操作接收完整记账顺序，而不是筛选后的行。尚无 Session 摘要的新成员会等待摘要，已保存的位置则在摘要暂时缺失时保留。归档显隐仅在派生行时应用。置顶和拖拽写入完整顺序，普通派生不执行写入。当前选中的空白 Session 仍是一次显式位置写入；Workspace 重连时同样如此，此时保留其他已保存成员，直到基线确定成员关系。侧边栏收成窄栏或搜索替代列表主体时，排序仍保持挂载。最近更新从当前摘要派生，不读取已保存位置；时间相同时按 Session id 稳定排序。当前 Workspace 是一条由导航服务写入的发布来源——每次主视图选择以及注册表丢失当前 Workspace 时写入——页签条与侧边栏各自通过注入的 hook 读取它。
+Workspace 基线就绪后，浏览器持久化的 Session 顺序记录只保留当前 Workspace id。`WorkspaceView.sessionIds` 提供 Workspace 成员关系，但不提供 Session 显示顺序。视图操作接收完整记账顺序，而不是筛选后的行。尚无 Session 摘要的新成员会等待摘要，已保存的位置则在摘要暂时缺失时保留。归档显隐仅在派生行时应用。置顶和拖拽写入完整顺序，普通派生不执行写入。该 Workspace 的新会话仍是一次显式位置写入；Workspace 重连时同样如此，此时保留其他已保存成员，直到基线确定成员关系。侧边栏收成窄栏或搜索替代列表主体时，排序仍保持挂载。最近更新从当前摘要派生，不读取已保存位置；时间相同时按 Session id 稳定排序。当前 Workspace 是一条由导航服务写入的发布来源——每次主视图选择以及注册表丢失当前 Workspace 时写入——页签条与侧边栏各自通过注入的 hook 读取它。
 
 侧边栏隐藏持久化摘要中带有 `origin: 'subagent'` 的行。可见普通行的共享 ongoing loading 来自其已加载 parent 目录中正在运行的直接 child，绝不来自摘要谱系。Child 活动状态使用最新 UI status，尚无该状态时使用 Session 摘要。
 

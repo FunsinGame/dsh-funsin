@@ -9,7 +9,7 @@ import type {
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   type ArchivedFilter,
-  deriveFlat, deriveSearchResults, orderByRecency, pinCurrentBlank, reconcileManualOrder, workspaceLabel,
+  deriveFlat, deriveSearchResults, newSessionId, orderByRecency, pinNewSession, reconcileManualOrder, workspaceLabel,
 } from '../src/client/tree.ts'
 import { createWorkspaceViewStore } from '../src/client/stores.ts'
 
@@ -64,13 +64,13 @@ const rowState = (options: {
 const noRows = rowState()
 
 describe('Session ordering', () => {
-  it('keeps the current New Session before pins', () => {
+  it('keeps the New Session before pins', () => {
     const sessions = withMain(list(
       summary('pin', 30),
       summary('ordinary', 20),
       { ...summary('blank', 0), blank: true },
     ), sid('blank'))
-    const order = pinCurrentBlank(sessions.ids, sid('blank'))
+    const order = pinNewSession(sessions.ids, sid('blank'))
     const rows = deriveFlat(sessions, order, rowState({ pinned: ['pin'] }), noAttention)
     expect(rows.map(row => row.id)).toEqual([sid('blank'), sid('pin'), sid('ordinary')])
   })
@@ -185,10 +185,10 @@ describe('Session ordering', () => {
     expect(members).toEqual([sid('plain'), sid('archived')])
   })
 
-  it('pins only the selected blank without changing the base order', () => {
-    expect(pinCurrentBlank([sid('newer'), sid('blank'), sid('older')], sid('blank')))
+  it('pins the New Session without changing the base order', () => {
+    expect(pinNewSession([sid('newer'), sid('blank'), sid('older')], sid('blank')))
       .toEqual([sid('blank'), sid('newer'), sid('older')])
-    expect(pinCurrentBlank([sid('newer'), sid('older')], undefined))
+    expect(pinNewSession([sid('newer'), sid('older')], undefined))
       .toEqual([sid('newer'), sid('older')])
   })
 })
@@ -315,14 +315,35 @@ describe('deriveFlat', () => {
     expect(deriveFlat(partial, partial.ids, noRows, noAttention).map(row => row.id)).toEqual([sid('present')])
   })
 
-  it('shows only the current blank session and excludes blanks from search', () => {
+  it('shows the New Session while another Session is selected and hides legacy duplicate blanks', () => {
     const currentBlank = { ...summary('current-blank', 9), blank: true, retainedBy: { mainView: 1 } }
     const staleBlank = { ...summary('stale-blank', 8), blank: true }
-    const sessions = list(currentBlank, summary('real', 1), staleBlank)
+    const sessions = withMain(list(currentBlank, summary('real', 1), staleBlank), sid('real'))
     const rows = deriveFlat(sessions, sessions.ids, noRows, noAttention)
     expect(rows.map(row => row.id)).toEqual([currentBlank.id, sid('real')])
     expect(rows.map(row => row.title)).toEqual(['', 'real'])
     expect(rows.map(row => row.blank)).toEqual([true, false])
+  })
+
+  it('prefers the selected blank as the Workspace New Session', () => {
+    const earlier = { ...summary('earlier-blank', 9), blank: true }
+    const selected = { ...summary('selected-blank', 8), blank: true, retainedBy: { mainView: 1 } }
+    const sessions = list(earlier, selected, summary('real', 1))
+    expect(deriveFlat(sessions, sessions.ids, noRows, noAttention).map(row => row.id))
+      .toEqual([selected.id, sid('real')])
+  })
+
+  it('resolves the New Session from membership, selection, and the archive set', () => {
+    const first = { ...summary('first', 9), blank: true }
+    const second = { ...summary('second', 8), blank: true }
+    const sessions = list(first, second, summary('real', 1))
+    const members = [first.id, second.id, sid('real')]
+    expect(newSessionId(sessions, members, undefined, noArchive)).toBe(first.id)
+    expect(newSessionId(sessions, members, first.id, noArchive)).toBe(first.id)
+    expect(newSessionId(sessions, members, second.id, noArchive)).toBe(second.id)
+    expect(newSessionId(sessions, members, sid('real'), noArchive)).toBe(first.id)
+    expect(newSessionId(sessions, members, undefined, [first.id])).toBe(second.id)
+    expect(newSessionId(sessions, [sid('real')], undefined, noArchive)).toBeUndefined()
   })
 
   it('hides archived sessions under the default filter', () => {

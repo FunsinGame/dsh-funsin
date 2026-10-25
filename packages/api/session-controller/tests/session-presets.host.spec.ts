@@ -50,6 +50,8 @@ interface HarnessOptions {
   readonly locked?: ReadonlySet<SessionId>
   /** Declared presets whose activation failed. */
   readonly broken?: ReadonlySet<string>
+  /** Preset ids whose registered definition generation moved after a blank recorded them. */
+  readonly staleDefinitions?: ReadonlySet<string>
   /** Requested presets whose resolution waits for the paired promise. */
   readonly resolving?: ReadonlyMap<string, Promise<void>>
   /** Workspace placement served to `workspaceId` requests. */
@@ -97,6 +99,9 @@ async function harness(options: HarnessOptions = {}) {
             sessionId: agent.id, agentPreset,
           })
         }
+        // The registry no-ops while the Agent already runs this definition generation.
+        if (options.staleDefinitions?.has(agentPreset) !== true
+          && ctx.sessionProjections.stateOf(agent.session, 'agentPreset') === agentPreset) return agentPreset
         selections.push({ sessionId: agent.id, agentPreset })
         agent.session.append('agent-preset/selected', { agentPreset })
         return agentPreset
@@ -265,6 +270,19 @@ describe('session.create reuse of a live blank Session', () => {
 
     expect(reused).toMatchObject({ ok: true, value: { sessionId: 'draft', agentPreset: 'minimal' } })
     expect(selections).toEqual([])
+  })
+
+  it('recomposes a blank Session whose preset definition changed under the same identity', async () => {
+    const { remote, selections } = await harness({
+      presets: ['standard'],
+      staleDefinitions: new Set(['standard']),
+    })
+    await remote.create({ sessionId: SessionId('draft') })
+
+    const reused = await remote.create({ sessionId: SessionId('draft') })
+
+    expect(reused).toMatchObject({ ok: true, value: { sessionId: 'draft', agentPreset: 'standard' } })
+    expect(selections).toEqual([{ sessionId: SessionId('draft'), agentPreset: 'standard' }])
   })
 
   it('validates the requested preset before touching the blank Session', async () => {
