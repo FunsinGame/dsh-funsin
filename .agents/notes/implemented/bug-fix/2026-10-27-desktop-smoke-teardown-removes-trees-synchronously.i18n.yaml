@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-27-desktop-smoke-teardown-removes-trees-synchronously.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-10-27-desktop-smoke-teardown-removes-trees-synchronously.md
+/agent-note-desktop-smoke-teardown-removes-trees-synchronously:
+  en: b11f1e71692e3b16
+  zh: 2c45d977e7b7de89
+/agent-note-desktop-smoke-teardown-removes-trees-synchronously/problem:
+  en: 2449d73f3a33c644
+  zh: 766d3f1b883ff5a3
+/agent-note-desktop-smoke-teardown-removes-trees-synchronously/decision:
+  en: 25c85d72c5f637f0
+  zh: 5e49068baa2815b6
+/agent-note-desktop-smoke-teardown-removes-trees-synchronously/alternatives-considered:
+  en: 517063b89a88f46e
+  zh: e23223eb9d0405ea
+/agent-note-desktop-smoke-teardown-removes-trees-synchronously/consequences:
+  en: 731314303448c275
+  zh: 856118e7c6925eef
+/agent-note-desktop-smoke-teardown-removes-trees-synchronously/testing:
+  en: 4b6f9f7c985997c0
+  zh: b49b0c4390e1fbf9

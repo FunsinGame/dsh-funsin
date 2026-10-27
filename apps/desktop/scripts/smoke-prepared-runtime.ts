@@ -1,12 +1,13 @@
 /** Check payloads and Host boot with private native-cache and Harness directories. */
 import { execFile } from 'node:child_process'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { runtimeArchivePath } from '../../desktop-host/src/office-engine.ts'
 import { desktopNodeEnvironment } from '../src/node-environment.ts'
 import type { DesktopRuntimeDescriptor } from '../src/runtime-tree.ts'
+import { removeTree } from './remove-tree.ts'
 import { scrubWindowsSigningEnvironment } from './windows-sign.mjs'
 import { smokeDesktopRuntime } from './smoke-runtime.ts'
 import { verifyRuntimeArchive } from './verify-runtime-archive.ts'
@@ -44,6 +45,6 @@ export async function smokePreparedRuntime(
     process.stdout.write(stdout)
     await smokeDesktopRuntime(root, node, descriptor, environment, resourcesRuntime)
   } finally {
-    await rm(cache, { recursive: true, force: true })
+    removeTree(cache)
   }
 }
