@@ -247,6 +247,25 @@ describe('WorkspaceBrowser', () => {
     expect(screen.queryByText('session-8')).toBeNull()
   })
 
+  it('resets the watermark when switching Workspaces', () => {
+    const alpha = Array.from({ length: 8 }, (_, index) => summary(`alpha-${index + 1}`, 8 - index))
+    const beta = Array.from({ length: 6 }, (_, index) => summary(`beta-${index + 1}`, 6 - index))
+    const b = mount({
+      useCurrentWorkspace: hook(wid('alpha')),
+      useSessions: hook(sessionState([...alpha, ...beta], { main: sid('alpha-7') })),
+      useWorkspaces: hook(workspaceState([
+        workspace('alpha', alpha.map(item => item.id)),
+        workspace('beta', beta.map(item => item.id)),
+      ])),
+    })
+    // Alpha reveals its deep current Session and raises its watermark.
+    expect(screen.getByText('alpha-7')).toBeTruthy()
+    rerender(b, { useCurrentWorkspace: hook(wid('beta')) })
+    // Beta starts from its base five rows instead of inheriting alpha's raise.
+    expect(screen.getByText('beta-5')).toBeTruthy()
+    expect(screen.queryByText('beta-6')).toBeNull()
+  })
+
   it('hides archived rows, shows them on request, and narrows to them', () => {
     const items = [summary('kept', 2), summary('stored', 1)]
     const b = mountWorkspace(items, { archived: [sid('stored')] })

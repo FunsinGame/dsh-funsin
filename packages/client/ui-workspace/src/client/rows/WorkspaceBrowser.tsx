@@ -924,7 +924,11 @@ export function WorkspaceBrowser({
             />
           )
           : (
+            // Watermarks are per-Workspace browsing state. Remounting on the
+            // account keeps one Workspace's expanded list from leaking into the
+            // next; `animationResetKey` alone preserves component state.
             <SessionList
+              key={accountKey ?? ''}
               list={list}
               sessionIds={orderedSessionIds}
               rowState={rowState}
