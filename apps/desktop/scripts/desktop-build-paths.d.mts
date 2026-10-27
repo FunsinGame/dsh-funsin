@@ -1,6 +1,6 @@
 import type { DesktopAutoUpdateTarget } from './desktop-auto-update-environment.mjs'
 
-/** Mutable target directories plus the shared immutable download cache. */
+/** Mutable target directories plus the shared immutable download cache and temporary root. */
 export interface DesktopTargetBuildPaths {
   readonly root: string
   readonly artifacts: string
@@ -15,6 +15,7 @@ export interface DesktopTargetBuildPaths {
   readonly packedVendor: string
   readonly packedLandlock: string
   readonly downloads: string
+  readonly tmp: string
 }
 
 /**

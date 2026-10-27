@@ -35,11 +35,13 @@ describe('desktop build paths', () => {
     expect(windows.runtime).toContain(join('targets', 'win-x64', 'runtime'))
   })
 
-  it('shares only the immutable upstream download cache', () => {
+  it('shares the build-wide download cache and temporary root', () => {
     const arm64 = desktopTargetBuildPaths('mac-arm64')
     const x64 = desktopTargetBuildPaths('mac-x64')
     expect(arm64.downloads).toBe(x64.downloads)
+    expect(arm64.tmp).toBe(x64.tmp)
     expect(arm64.downloads).not.toContain(`${sep}targets${sep}`)
+    expect(arm64.tmp).not.toContain(`${sep}targets${sep}`)
   })
 
   it('resolves the development primary runtime from the build target rather than the host architecture', () => {

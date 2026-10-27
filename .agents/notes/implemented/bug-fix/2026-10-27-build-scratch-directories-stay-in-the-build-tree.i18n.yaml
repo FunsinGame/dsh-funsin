@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-27-build-scratch-directories-stay-in-the-build-tree.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-10-27-build-scratch-directories-stay-in-the-build-tree.md
+/agent-note-build-scratch-directories-stay-inside-the-build-tree:
+  en: 2116f141eb68a548
+  zh: 9732aa1d1c7cacc5
+/agent-note-build-scratch-directories-stay-inside-the-build-tree/problem:
+  en: ce59f9122789c60e
+  zh: 258c614185aaee73
+/agent-note-build-scratch-directories-stay-inside-the-build-tree/decision:
+  en: 3856e8203becd9f2
+  zh: ef678af91d77ec5e
+/agent-note-build-scratch-directories-stay-inside-the-build-tree/alternatives-considered:
+  en: 707ba7c4059019cd
+  zh: fd970add2dbb1172
+/agent-note-build-scratch-directories-stay-inside-the-build-tree/consequences:
+  en: b288343d4a133c35
+  zh: e2407210c032cb1e
+/agent-note-build-scratch-directories-stay-inside-the-build-tree/testing:
+  en: 3229e743fd1f3bab
+  zh: 19e7b4bdc81745ed
