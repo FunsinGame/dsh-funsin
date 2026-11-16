@@ -310,7 +310,7 @@ function sameToken(expected: string, supplied: string): boolean {
  * @throws when the body is too large or is not JSON.
  */
 async function readJson(request: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = []
+  const chunks: Uint8Array[] = []
   let size = 0
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
@@ -318,7 +318,7 @@ async function readJson(request: IncomingMessage): Promise<unknown> {
     if (size > MAX_BODY_BYTES) throw new Error('external-input: request body is too large')
     chunks.push(buffer)
   }
-  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'))
 }
 
 /**

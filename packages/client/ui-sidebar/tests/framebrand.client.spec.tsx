@@ -27,6 +27,7 @@ let observers: ObserverStub[] = []
 afterEach(() => {
   cleanup()
   document.documentElement.removeAttribute('data-windows-titlebar')
+  document.documentElement.style.removeProperty('--dsh-frame-brand-end')
   document.documentElement.style.removeProperty('--dsh-windows-brand-end')
   document.documentElement.style.removeProperty('--dsh-windows-caption-controls-start')
   document.documentElement.style.removeProperty('--dsh-windows-menu-start')
@@ -53,6 +54,22 @@ describe('FrameBrand', () => {
     expect(screen.getByTestId('custom-brand-mark')).toBeTruthy()
     expect(screen.getByTestId('custom-brand-name')).toBeTruthy()
     expect(document.querySelector('[data-frame-brand]')).not.toBeNull()
+  })
+
+  it('publishes its right edge for the narrow-frame drawer opener', () => {
+    vi.stubGlobal('ResizeObserver', class extends ObserverStub {
+      constructor(callback: () => void) {
+        super(callback)
+        observers.push(this)
+      }
+    })
+    mountSlots(false)
+    // The drawer opener starts after the wordmark in every frame band, not
+    // only under the Windows caption.
+    expect(document.documentElement.style.getPropertyValue('--dsh-frame-brand-end')).toBe('8px')
+    expect(document.documentElement.style.getPropertyValue('--dsh-windows-brand-end')).toBe('')
+    cleanup()
+    expect(document.documentElement.style.getPropertyValue('--dsh-frame-brand-end')).toBe('')
   })
 
   it('joins the Windows caption line and publishes the brand edge for the menus', () => {

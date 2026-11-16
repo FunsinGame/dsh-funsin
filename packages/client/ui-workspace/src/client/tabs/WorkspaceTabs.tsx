@@ -306,7 +306,8 @@ export function WorkspaceTabs({
         }}
         onClose={() => { setMenu(null) }}
         portal
-        getAnchorRect={() => menu?.rect ?? null}
+        contextual
+        anchorPoint={menu === null ? undefined : { x: menu.rect.x, y: menu.rect.y }}
         side="bottom"
       />
       {/* This surface's add flow: the same interaction the empty state hosts,

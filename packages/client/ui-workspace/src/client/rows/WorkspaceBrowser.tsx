@@ -1,40 +1,40 @@
 /**
  * The current Workspace's Session list, filling the sidebar shell's
  * `sidebar.workspaces` hole: section header (current Workspace title with its
- * rename menu, search, view options), the flat Session list of that one
- * Workspace, the search body, and the Workspace rename dialog.
+ * rename verb, search, view options), the animated flat Session list of that
+ * one Workspace, the search body, and the shared Workspace rename dialog.
  *
- * The tab strip (`shell.header`) owns the Workspace inventory — switching,
- * ordering, closing, adding. This region therefore lists only Sessions
- * accounted to the current Workspace: it never renders a Workspace group, an
- * ungrouped bucket, or a Workspace drag. Session rows keep their manual order
- * per Workspace account, their five-row watermark with its attention-based
- * raise, their drag reordering, and the `sidebar.workspaces.session.menu.item`
- * / `sidebar.workspaces.session.row.action` entry lists rendered through this
- * entry's `renderSlot`. Search stays registry-wide: it is the one route to a
- * Session outside the current Workspace, and each result names its Workspace.
+ * The tab strip (`shell.workspace.tabs`) owns the Workspace inventory —
+ * switching, ordering, closing, adding. This region therefore lists only
+ * Sessions accounted to the current Workspace: it never renders a Workspace
+ * group, an ungrouped bucket, or a Workspace drag. Session rows keep their
+ * manual order per Workspace account, their five-row watermark with its
+ * attention-based raise, their drag reordering, their context-menu trigger,
+ * the `sidebar.workspaces.session.row.action` hover buttons, and the leading,
+ * trailing, and hover seats they render through this entry's `renderSlot`.
+ * Search stays registry-wide: it is the one route to a Session outside the
+ * current Workspace, and each result names its Workspace.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
+import { WorkspaceDialogs } from './WorkspaceDialogs.tsx'
 import {
-  Button, HoverCardGroup, IconArchiveCheckOutlineRegular, IconArchiveOffOutlineRegular, IconArchiveOutlineRegular,
+  AnimatedRows, HoverCardGroup, IconArchiveCheckOutlineRegular, IconArchiveOffOutlineRegular, IconArchiveOutlineRegular,
   IconChevronsUpDownOutlineRegular, IconClockOutlineRegular, IconCloseFillRegular, IconEditOutlineRegular,
-  IconEllipsisOutlineRegular, IconQueueOutlineRegular, IconSearchOutlineRegular, IconSlidersTwoOutlineRegular,
-  Menu, Modal, Tooltip,
+  IconEllipsisOutlineRegular, IconQueueOutlineRegular, IconSearchOutlineRegular, IconSlidersTwoOutlineRegular, Menu, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   SessionListState, SessionSearchResultItem,
 } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { workspaceDisplayTitle } from '@deepseek-ai/dsh-api-workspace-controller/default-workspace'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceBrowserProps } from '../contract/slots.ts'
 import type { ArchivedFilter, SessionNode, SessionOrderBy, SessionRowState } from '../tree.ts'
 import {
-  deriveFlat, deriveSearchResults, newSessionId, orderByRecency, pinNewSession, reconcileManualOrder,
+  deriveFlat, deriveSearchResults, newSessionId, orderByRecency, pinNewSession, reconcileManualOrder, sessionSearchIndex,
 } from '../tree.ts'
 import { SearchResultItem, SessionNodeItem } from './Rows.tsx'
-import { AnimatedRows } from './AnimatedRows.tsx'
 import css from './WorkspaceBrowser.module.css'
 
 /**
@@ -233,11 +233,13 @@ function sessionDragOrder(
 /** The scrolling Session list of the current Workspace; unmounting drops the watermarks. */
 function SessionList({
   list, sessionIds, rowState, onLeaveArchivedOnly, useSessionStatus, current,
-  open, onSessionRenameRequest, setSessionOrder, revealSessionId, onSessionRevealed, renderSlot,
+  open, onSessionRenameRequest, setSessionOrder, revealSessionId, onSessionRevealed,
+  renderSlot, renderFactorySlot, useContextMenuTarget, useContextMenu, useSessionAccess, home,
   animationResetKey, ready, t,
 }: Pick<
   WorkspaceBrowserProps,
-  'useSessionStatus' | 'open' | 'renderSlot' | 't'
+  'useSessionStatus' | 'open' | 'renderSlot' | 'renderFactorySlot' | 'useContextMenuTarget' | 'useContextMenu'
+  | 'useSessionAccess' | 't'
 > & {
   /** Always-mounted Session list snapshot. */
   list: SessionListState
@@ -255,6 +257,8 @@ function SessionList({
   onSessionRenameRequest: (sessionId: SessionId, currentTitle: string) => void
   /** Save a drag order and select Manual. */
   setSessionOrder: (order: readonly string[]) => void
+  /** Host account home; POSIX home-rooted hover paths display as `~`. */
+  home?: string | undefined
   /** One Session chosen from search that must be exposed and scrolled into view. */
   revealSessionId?: SessionId | undefined
   /** Acknowledge that the chosen Session row has been revealed. */
@@ -319,6 +323,11 @@ function SessionList({
               onOpen={open}
               onRenameRequest={onSessionRenameRequest}
               renderSlot={renderSlot}
+              renderFactorySlot={renderFactorySlot}
+              useContextMenuTarget={useContextMenuTarget}
+              useContextMenu={useContextMenu}
+              useSessionAccess={useSessionAccess}
+              home={home}
               onReveal={node.id === revealSessionId
                 ? () => { onSessionRevealed(node.id) }
                 : undefined}
@@ -387,6 +396,7 @@ interface RemoteSearchState {
 function SearchResults({
   useSessions,
   useSessionStatus,
+  useSessionAccess,
   open,
   onUnarchive,
   workspaces,
@@ -397,8 +407,8 @@ function SearchResults({
   resultLimit,
   usePanelInfo,
   t,
-}: Pick<WorkspaceBrowserProps, 'useSessions' | 'useSessionStatus' | 'open' | 't' | 'usePanelInfo'> & {
-  workspaces: Parameters<typeof deriveSearchResults>[1]
+}: Pick<WorkspaceBrowserProps, 'useSessions' | 'useSessionStatus' | 'open' | 't' | 'usePanelInfo' | 'useSessionAccess'> & {
+  workspaces: readonly WorkspaceView[]
   archivedSessionIds: readonly SessionNode['id'][]
   /** Search matches follow the archived filter selected for the list. */
   archivedFilter: ArchivedFilter
@@ -414,6 +424,18 @@ function SearchResults({
   const currentRemote = remote.query === query
     ? remote
     : { query, status: 'loading' as const, items: [], hasMore: false }
+  // The Session list republishes while replies run; each republish updates the
+  // previous index so unchanged titles, labels, and ids keep their preparation.
+  const [built, setBuilt] = useState(() => ({
+    list, workspaces, archivedSessionIds, archivedFilter,
+    index: sessionSearchIndex(list, workspaces, archivedSessionIds, archivedFilter),
+  }))
+  let index = built.index
+  if (built.list !== list || built.workspaces !== workspaces
+    || built.archivedSessionIds !== archivedSessionIds || built.archivedFilter !== archivedFilter) {
+    index = sessionSearchIndex(list, workspaces, archivedSessionIds, archivedFilter, built.index)
+    setBuilt({ list, workspaces, archivedSessionIds, archivedFilter, index })
+  }
   const results = useMemo(
     () => deriveSearchResults(
       list,
@@ -424,8 +446,9 @@ function SearchResults({
       statuses,
       currentRemote,
       resultLimit,
+      index,
     ),
-    [list, workspaces, query, archivedSessionIds, archivedFilter, statuses, currentRemote, resultLimit],
+    [list, workspaces, query, archivedSessionIds, archivedFilter, statuses, currentRemote, resultLimit, index],
   )
   const pending = currentRemote.status === 'loading'
   const currentId = panelActive
@@ -443,6 +466,7 @@ function SearchResults({
               currentId={currentId}
               onOpen={open}
               onUnarchive={onUnarchive}
+              useSessionAccess={useSessionAccess}
               t={t}
             />
           ))}
@@ -485,16 +509,23 @@ export function WorkspaceBrowser({
   wide,
   usePanelInfo,
   expandSidebar,
+  useSectionScroller,
   useSessions,
   useSessionStatus,
+  useSessionAccess,
   useWorkspaces,
   useCurrentWorkspace,
   useStore,
+  useHostInfo,
+  useWorkspaceActionRequest,
   actions,
+  settleWorkspaceAction,
+  requestWorkspaceAction,
   open,
   requestSessionRename,
   notifyArchivedNotOpenable,
   renameWorkspace,
+  deleteWorkspace,
   unarchiveSession,
   searchSessions,
   searchResultLimit,
@@ -502,11 +533,18 @@ export function WorkspaceBrowser({
   useShortcuts,
   requestSearch,
   renderSlot,
+  renderFactorySlot,
+  useContextMenuTarget,
+  useContextMenu,
   t,
 }: WorkspaceBrowserProps) {
   const shortcuts = useShortcuts(rows => rows)
   const searchShortcut = shortcuts.find(row => row.id === 'session.search')
   const shortcutState = useWorkspaceShortcuts(state => state)
+  const home = useHostInfo(info => info.home)
+  // The list area is this section's own vertical scroller; the sidebar hands
+  // wheel scrolling over its viewport to it once the navigation has moved away.
+  const { bindScrollerRef } = useSectionScroller()
   // Ordering remains live while the rail or search replaces the list body.
   const list = useSessions(state => state)
   const storedWorkspaces = useWorkspaces(state => state.items)
@@ -619,7 +657,6 @@ export function WorkspaceBrowser({
   })
   const searchRoot = useRef<HTMLDivElement | null>(null)
   const searchInput = useRef<HTMLInputElement | null>(null)
-  const composingRef = useRef(false)
 
   const openSearchResult = (sessionId: SessionId): void => {
     if (archivedSessionIds.includes(sessionId)) {
@@ -718,45 +755,11 @@ export function WorkspaceBrowser({
     }
   }, [normalizedQuery, searchSessions])
 
-  // Rename dialog (browser-owned so it outlives row unmounts during collapse).
-  // The stored title decides whether confirming is a real rename; the draft is
-  // seeded with the label on screen. They differ for a Workspace still
-  // carrying its automatic title, so confirming the prefill pins that name.
-  const [renameTarget, setRenameTarget] = useState<{ workspaceId: WorkspaceId; storedTitle: string } | null>(null)
-  const [renameDraft, setRenameDraft] = useState('')
-  const [renaming, setRenaming] = useState(false)
-  const [renameError, setRenameError] = useState<string | null>(null)
+  // The Workspace verbs raise the shared rename/delete dialog through the
+  // injected request; the browser only renders whatever request is pending, so
+  // the dialog outlives a row unmount during collapse.
+  const workspaceActionRequest = useWorkspaceActionRequest(value => value)
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false)
-  const renameTrimmed = renameDraft.trim()
-  // Self is excluded by identity, not by title: the draft is seeded with the
-  // localized label, which for an automatically titled Workspace equals its
-  // own displayed title without being a conflict with itself.
-  const renameDuplicate = renameTarget !== null && renameTrimmed !== ''
-    && storedWorkspaces.some(w => w.workspaceId !== renameTarget.workspaceId && w.title === renameTrimmed)
-  const renameBlocked = renaming || renameTrimmed === ''
-    || renameTarget === null || renameTrimmed === renameTarget.storedTitle || renameDuplicate
-  const openRename = (workspaceId: WorkspaceId, storedTitle: string, displayTitle: string): void => {
-    setRenameTarget({ workspaceId, storedTitle })
-    setRenameDraft(displayTitle)
-    setRenameError(null)
-  }
-  const closeRename = () => {
-    if (renaming) return
-    setRenameTarget(null)
-    setRenameError(null)
-  }
-  const confirmRename = () => {
-    if (renameBlocked) return
-    setRenaming(true)
-    setRenameError(null)
-    renameWorkspace(renameTarget.workspaceId, renameTrimmed).then(() => {
-      setRenaming(false)
-      setRenameTarget(null)
-    }).catch((reason: unknown) => {
-      setRenaming(false)
-      setRenameError(reason instanceof Error ? reason.message : String(reason))
-    })
-  }
 
   // The search results' restore button; the row actions own the rest of the
   // Session verbs as slot entries.
@@ -766,13 +769,15 @@ export function WorkspaceBrowser({
     })
   }
 
-  const workspaceTitle = currentWorkspace?.title ?? t('section.sessions')
+  // The section names the Workspace it lists; a registry with no current
+  // Workspace falls back to the area's own name.
+  const workspaceTitle = currentWorkspace?.title ?? t('section.workspaces')
   const revealInCurrentWorkspace = revealSessionId !== undefined
     && currentWorkspace?.sessionIds.includes(revealSessionId) === true
 
   return (
     <div className={clsx(css.root, !wide && css.rail)}>
-      <div className={css.sectionHeader}>
+      <div className={css.sectionHeader} data-sidebar-workspace-header="">
         {wide && (
           <span
             className={clsx(css.sectionLabel, css.wide, searchExpanded && css.sectionLabelHidden)}
@@ -860,11 +865,7 @@ export function WorkspaceBrowser({
                 setWorkspaceMenuOpen(false)
                 /* v8 ignore next -- Menu emits only the rename row supplied above. */
                 if (id !== 'rename') return
-                openRename(
-                  currentWorkspace.workspaceId,
-                  storedWorkspaces.find(w => w.workspaceId === currentWorkspace.workspaceId)?.title ?? currentWorkspace.title,
-                  currentWorkspace.title,
-                )
+                requestWorkspaceAction(currentWorkspace.workspaceId, currentWorkspace.title, 'rename')
               }}
               align="end"
               dense
@@ -905,11 +906,12 @@ export function WorkspaceBrowser({
 
       {/* Always-mounted seat keeps the region's flex slot while the list
           itself is wide-only. */}
-      <div className={css.listArea}>
+      <div ref={wide ? bindScrollerRef : undefined} className={css.listArea} data-sidebar-list-area="">
         {wide && (normalizedQuery !== ''
           ? (
             <SearchResults
               usePanelInfo={usePanelInfo}
+              useSessionAccess={useSessionAccess}
               useSessions={useSessions}
               useSessionStatus={useSessionStatus}
               open={openSearchResult}
@@ -940,6 +942,11 @@ export function WorkspaceBrowser({
               open={guardedOpen}
               onSessionRenameRequest={requestSessionRename}
               renderSlot={renderSlot}
+              renderFactorySlot={renderFactorySlot}
+              useContextMenuTarget={useContextMenuTarget}
+              useContextMenu={useContextMenu}
+              useSessionAccess={useSessionAccess}
+              home={home}
               setSessionOrder={saveSessionOrder}
               revealSessionId={revealInCurrentWorkspace ? revealSessionId : undefined}
               onSessionRevealed={acknowledgeSessionReveal}
@@ -948,40 +955,15 @@ export function WorkspaceBrowser({
           ))}
       </div>
 
-      <Modal
-        open={renameTarget !== null}
-        onClose={closeRename}
-        closeLabel={t('close')}
-        title={t('rename.workspace.title')}
-        footer={(
-          <>
-            <Button variant="outline" disabled={renaming} onClick={closeRename}>{t('cancel')}</Button>
-            <Button variant="primary" disabled={renameBlocked} onClick={confirmRename}>{t('rename')}</Button>
-          </>
-        )}
-      >
-        <input
-          className={css.renameInput}
-          value={renameDraft}
-          aria-label={t('field.workspaceName')}
-          data-modal-autofocus
-          disabled={renaming}
-          onFocus={(e) => { e.target.select() }}
-          onChange={(e) => { setRenameDraft(e.target.value); setRenameError(null) }}
-          onCompositionStart={() => { composingRef.current = true }}
-          onCompositionEnd={() => { composingRef.current = false }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !composingRef.current) {
-              e.preventDefault()
-              confirmRename()
-            }
-          }}
-        />
-        {renameDuplicate && (
-          <div className={css.renameError} role="alert">{t('conflict.named', { name: renameTrimmed })}</div>
-        )}
-        {renameError !== null && <div className={css.renameError} role="alert">{renameError}</div>}
-      </Modal>
+      {workspaceActionRequest !== null && <WorkspaceDialogs
+        key={`${workspaceActionRequest.action}/${workspaceActionRequest.workspaceId}`}
+        request={workspaceActionRequest}
+        workspaces={storedWorkspaces}
+        renameWorkspace={renameWorkspace}
+        deleteWorkspace={deleteWorkspace}
+        settleWorkspaceAction={settleWorkspaceAction}
+        t={t}
+      />}
     </div>
   )
 }

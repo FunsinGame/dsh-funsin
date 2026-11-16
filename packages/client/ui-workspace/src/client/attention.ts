@@ -14,7 +14,7 @@
  * the two surfaces do not clear each other.
  */
 import type { WorkspaceId, WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'

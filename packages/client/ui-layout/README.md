@@ -25,9 +25,13 @@ This package provides the Web GUI's three-column AppFrame, edge-column widths, a
 <a id="use-this-package"></a>
 ## Use this package
 
-Desktop Mod+B toggles the left sidebar through the same layout action used by its controls. The shortcut command is unavailable behind modal dialogs and yields to terminal input.
+Desktop Mod+B toggles the left sidebar through the same layout action used by its controls. The shortcut remains available inside the navigation drawer, is unavailable behind other modal dialogs, and yields to terminal input.
 
-The root slot composes a five-band workbench: the brand header, the Workspace tab strip, the workbench row, the bottom panel, and the status bar. The workbench row is the 48px activity rail followed by the sidebar, main content, and right column; the rail spans the tab strip's band too, so it runs from below the brand header to the columns' bottom. The sidebar spans 264–420px, defaults to 280px, and retains a 56px rail when collapsed; below 1024px of content width it collapses automatically, and opening the right panel collapses a manually expanded sidebar. The right panel first opens at 45% of the viewport, then retains the user's pixel preference, capped at 70%. To protect 400px for the center, the frame first reduces the right panel to 300px, then reports insufficient room so its occupant closes it, and only then compresses the center further. Dragging has no transition delay; the right handle is absent while closed or fullscreen.
+The root slot composes a five-band workbench: the brand header, the Workspace tab strip, the workbench row, the bottom panel, and the status bar. The workbench row is the 48px activity rail followed by the sidebar, main content, and right column; the rail spans the tab strip's band too, so it runs from below the brand header to the columns' bottom. The sidebar spans 264–420px, defaults to 280px, and retains a 56px rail when collapsed at widths of 768px and above; below 768px, without a native Windows caption, it uses a modal drawer without reserving a column, the header retains the reopen controls, and navigation closes the drawer. Below 1024px of content width it collapses automatically, and opening the right panel collapses a manually expanded sidebar. The right panel first opens at 45% of the viewport, then retains the user's pixel preference, capped at 70%. To protect 400px for the center, the frame first reduces the right panel to 300px, then reports insufficient room so its occupant closes it, and only then compresses the center further. Dragging has no transition delay; the right handle is absent while closed or fullscreen.
+
+When the browser reports a folded device in landscape and the frame is at least 768px wide, the expanded sidebar occupies half the frame. This midpoint heuristic targets book postures with a vertical center fold; it does not identify the hinge direction or reserve its physical width, so horizontal or off-center folds are not supported by this adjustment. Its resize handle is hidden; unfolding restores the saved width. Fold changes at a stable viewport width use the existing track transition; reduced motion disables it. Browsers without the device-posture media feature keep the ordinary layout.
+
+The drawer mask fades with the panel’s transition duration and easing on both open and close; reduced motion disables both transitions. Entering drawer mode from an already collapsed sidebar hides the drawer immediately; an expanded sidebar keeps its closing slide. The drawer has no edge divider, and its frame does not scroll. On macOS, the drawer uses the same opaque background as Web; window vibrancy applies only to the ordinary sidebar. The frame fills the shell’s layout viewport, retaining its height while the keyboard opens. Drawer backing and mask cover the shell’s full height, including `shell.bottom`, above fullscreen and floating right panels. Browser-owned status and address bars remain outside the shell; the layout adds no synthetic safe-area insets.
 
 Global panels occupy the root-scoped `main` keyed slot; `conversation` is the reserved key for the Conversation. `ctx.layout.selectPanel(id)` selects a registered panel, and `null` selects the Conversation without changing the current Session. The shipped global panels (Schedules today) keep the sidebar's panel list; the Plugins page moved out of it into the activity bar.
 
@@ -85,7 +89,7 @@ The root publishes `--dsh-frame-top-clearance` for the reserved strip (48px on m
 
 ### Theme presentation
 
-The presenter consumes resolved theme snapshots and projects them onto the document: `html { color-scheme }` for native UA chrome, `body[data-ds-dark-theme]` from the active color scheme, the theme's alias tokens, `--dsh-content-font-size`, `--dsh-code-font-size`, `--dsh-terminal-font-size`, and each non-empty `--dsh-font-family-<role>` list as inline variables on body, and one owned `<meta name="theme-color">` whose content follows the computed body background. Disposing the presenter removes its metadata node with its other global writes.
+The presenter consumes resolved theme snapshots and projects them onto the document: `html { color-scheme }` for native UA chrome, `body[data-ds-dark-theme]` from the active color scheme, the theme's alias tokens, `--dsh-content-font-size`, `--dsh-code-font-size`, `--dsh-terminal-font-size`, and each non-empty `--dsh-font-family-<role>` list as inline variables on body, and one owned `<meta name="theme-color">` whose content follows the computed body background. It also refreshes that metadata when document-head style elements are installed, edited or removed. Disposing the presenter stops this observation and removes its metadata node with its other global writes.
 
 -----
 
@@ -94,6 +98,8 @@ The presenter consumes resolved theme snapshots and projects them onto the docum
 
 <details>
 <summary>Implementation internals — click to expand</summary>
+
+The root registration supplies folded-landscape posture through an injected observable. The renderer owns its media-query subscription; AppFrame reads the snapshot through the bound hook. Client registrations running without browser media APIs use the ordinary layout.
 
 `selectPanel(id)` checks the live `main` registry before changing selection; an absent key throws and leaves the current panel intact. `beginNavigation()` returns an abort signal for an asynchronous UI navigation. A later call, a valid panel selection (including repeated selection), or layout disposal aborts that signal without cancelling underlying Session creation. Consumers check the signal before committing navigation or moving drafts.
 
@@ -134,7 +140,7 @@ These limits define the current layout behavior. They are current package constr
 
 - **Panel geometry is transient** — reload restores the sidebar default and the right panel hidden; each dragged width is one frame-wide preference, not a per-Session fact. The activity-rail order is the one persisted layout preference.
 - **The selected activity is transient too** — reload returns to the built-in `workspace` activity, and a status-bar entry holds no value of its own: it renders whatever its registration's observable publishes.
-- **Extremely narrow windows** — after the right panel closes, the center may still fall below 400px; the left 56px rail remains, and the 48px activity rail never yields.
+- **Extremely narrow windows** — after the right panel closes, the center may still fall below 400px; the 48px activity rail never yields, and the sidebar contributes its 56px rail above 768px while a browser drawer reserves no column below it.
 - **The activity rail is a fixed 48px track** — it reserves that width even with no registered entries, and a plugin cannot widen or hide it.
 - **Window-chrome geometry does not move for the rail** — the rail occupies the workbench row only, so the macOS `shell.leading` seat and the Windows caption keep their existing inset while the activity rail starts below the header band.
 - **Track and panel travel on one shared curve only while animating** — during a discrete open/close the frame sets `data-animating` and its track transition and the occupant's slide read the same duration and easing variables; an occupant that used its own would detach the panel's edge from the conversation's while squeezing. Drags and instant presentation switches run transition-free, so the curve does not cover them.

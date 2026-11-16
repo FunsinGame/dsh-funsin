@@ -26,7 +26,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import { relativeTime } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { IConversation, UserTextNodeProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { UserTextNodeProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { FileReference, FolderReference, type FileReferenceInjected } from './FileReference.tsx'
 import { fileReferenceLabel, parseFileReferenceTarget } from './reference-target.ts'
 import { fileReferenceRule, folderReferenceRule } from './user-text-rules.ts'
@@ -37,8 +37,8 @@ import type {
 import { formatFileMention } from '@deepseek-ai/dsh-file-reference/grammar'
 import type { FileReferenceCandidate } from '@deepseek-ai/dsh-file-reference/types'
 import type { SessionReferenceMentionCandidate } from '@deepseek-ai/dsh-session-reference/types'
-import { abbreviateHomePath, fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
-import { en, NS, zh, type ReferenceKey } from './locales.ts'
+import { abbreviateHomePath, fileAddressFor, resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
+import { en, ja, es, fr, de, ru, pt, NS, zh, type ReferenceKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-api-session-controller/client' {
   interface SessionReferenceSourceMap {
@@ -49,7 +49,7 @@ declare module '@deepseek-ai/dsh-api-session-controller/client' {
 
 /** Required services: the trigger registry, the Remote namespaces, and the copy. */
 export const inject = [
-  'conversation', 'inputTriggers', 'locale', 'sessions', 'remote', 'remote.fileReferences',
+  'inputTriggers', 'locale', 'sessions', 'remote', 'remote.fileReferences',
   'remote.sessionReferenceResolver', 'sidebarRight', 'slots', 'uiConversation',
 ]
 
@@ -58,7 +58,7 @@ export const inject = [
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-reference: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-reference: dictionaries')
   const t = ctx.locale.bind(NS)
   const sessions = ctx.get('sessions') as ISessions
   ctx.uiConversation.userText.register(fileReferenceRule)
@@ -67,6 +67,7 @@ export function apply(ctx: ClientContext): void {
     yield ctx.slots.register({
       name: 'conversation.user.text.node', key: 'file', priority: 100, locale: NS,
       inject: (sessionId: UserTextNodeProps<'file'>['sessionId']): FileReferenceInjected => ({
+        resolveFilePath: path => resolveWorkspacePath(sessions.list.getSnapshot().byId[sessionId]?.cwd, path),
         openFile: (path, line) => {
           const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
           const address = fileAddressFor(sessionId, cwd, path)
@@ -234,7 +235,7 @@ function applyExternalInsert(
   sessions: ISessions,
   request: ComposerInsertRequest,
 ): ExternalInsertOutcome {
-  const conversation = ctx.get('conversation') as IConversation | undefined
+  const conversation = ctx.get('conversation')
   if (conversation === undefined) return { ok: false, error: 'conversation unavailable' }
 
   const retained = Object.values(sessions.list.getSnapshot().byId)
@@ -269,7 +270,7 @@ function applyExternalInsert(
   return input.insertReferenceAtCaret({
     source: 'reference',
     ref,
-    label: fileReferenceLabel(request.path, request.startLine, request.endLine),
+    label: fileReferenceLabel(request.path, request.startLine, request.endLine) || request.path,
     appearance: 'file',
     clipboardText: ref,
   })

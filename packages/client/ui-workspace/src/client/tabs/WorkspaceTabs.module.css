@@ -74,9 +74,11 @@
   cursor: pointer;
 }
 
-.tab:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .tab:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 /* The current Workspace reads as a raised chip, not as a hover state. */
@@ -86,8 +88,10 @@
   font-weight: 500;
 }
 
-.tabActive:hover {
-  background: var(--dsw-alias-bg-base);
+@media (hover: hover) {
+  .tabActive:hover {
+    background: var(--dsw-alias-bg-base);
+  }
 }
 
 .tabDragging {
@@ -140,7 +144,9 @@
   cursor: pointer;
 }
 
-.addButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .addButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }

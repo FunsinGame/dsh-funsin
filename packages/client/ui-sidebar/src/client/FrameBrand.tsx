@@ -45,13 +45,16 @@ export function FrameBrand({ renderSlot, t }: FrameBrandProps) {
   const windowsTitlebar = document.documentElement.hasAttribute('data-windows-titlebar')
   const brand = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
-    if (!windowsTitlebar) return undefined
     const element = brand.current
     /* v8 ignore next -- the brand element renders whenever the effect runs. */
     if (element === null) return undefined
+    const root = document.documentElement.style
     const publish = (): void => {
       const end = Math.round(element.getBoundingClientRect().right) + 8
-      const root = document.documentElement.style
+      // Every frame band reads this: the narrow-frame drawer opener sits after
+      // the wordmark instead of over it.
+      root.setProperty('--dsh-frame-brand-end', `${end}px`)
+      if (!windowsTitlebar) return
       root.setProperty('--dsh-windows-brand-end', `${end}px`)
       // The caption controls start at the brand's edge. The sidebar adds its own
       // width through `--dsh-windows-caption-controls-width` only while it holds
@@ -66,7 +69,7 @@ export function FrameBrand({ renderSlot, t }: FrameBrandProps) {
     observer.observe(element)
     return () => {
       observer.disconnect()
-      const root = document.documentElement.style
+      root.removeProperty('--dsh-frame-brand-end')
       root.removeProperty('--dsh-windows-brand-end')
       root.removeProperty('--dsh-windows-caption-controls-start')
       root.removeProperty('--dsh-windows-menu-start')

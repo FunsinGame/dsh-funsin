@@ -25,11 +25,12 @@ import type { ActivityBarInjected, ActivityDropHalf, ActivityEntry, ActivityItem
 import {
   moveActivityOrder, readActivityOrder, resolveActivityOrder, writeActivityOrder,
 } from './activity-order.ts'
+import type { AppFrameInjected } from './AppFrame.tsx'
 import { createLayoutStore, WORKSPACE_ACTIVITY } from './stores.ts'
 import { StatusBar } from './StatusBar.tsx'
 import { LayoutController } from './service.ts'
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
-import { en as shortcutEn, zh as shortcutZh } from './shortcut-locales.ts'
+import { de, en, es, fr, ja, pt, ru, zh } from './shortcut-locales.ts'
 import { en as workbenchEn, zh as workbenchZh, type WorkbenchKey } from './locales.ts'
 import { ThemePresenter } from './theme-presenter.ts'
 
@@ -56,7 +57,7 @@ declare module '@deepseek-ai/cordis' {
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     /** Layout keyboard command labels. */
-    'shortcuts.layout': keyof typeof shortcutZh
+    'shortcuts.layout': keyof typeof zh
     /** Frame chrome copy: the activity bar and the status bar. */
     workbench: WorkbenchKey
   }
@@ -78,8 +79,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * the seats it declares disappear with it. To add something to the
      * sidebar, register into one of those inner seats instead.
      *
-     * The occupant receives the frame's live column state (collapsed, width)
-     * and is expected to render the compact control rail while collapsed.
+     * The occupant receives the frame's collapsed state, width and drawer mode.
+     * Drawer content stays mounted while hidden; other browser columns retain
+     * a compact control rail while collapsed.
      */
     'sidebar': { kind: 'single'; scope: 'root'; owner: SidebarOwnerProps }
     /**
@@ -182,9 +184,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'shell.overlay': { kind: 'list'; scope: 'root' }
     /**
      * Window-chrome seat at the frame's top-left, over every main panel.
-     * Mounted only while the sidebar column is fully hidden (macOS desktop
-     * collapse; other platforms keep the rail), so the occupant can assume the
-     * frame edge is the window edge and the macOS traffic lights sit before it.
+     * Mounted for narrow drawers and collapsed macOS desktop sidebars. macOS
+     * traffic lights sit before it outside native fullscreen; browser controls
+     * start at the frame edge.
      * OCCUPIED by ui-sidebar's reopen/New Session controls.
      *
      * While the seat is mounted the frame publishes
@@ -210,10 +212,12 @@ export interface ActivitySettingsOwnerProps {
 
 /** Sidebar owner share: live column state from the frame's concession solve. */
 export interface SidebarOwnerProps {
-  /** True when the sidebar is closed (the column renders the compact control rail). */
+  /** True when closed; a drawer is hidden, while other browser columns retain a rail. */
   collapsed: boolean
-  /** Rendered column width in px (SIDEBAR_COLLAPSED when collapsed). */
+  /** Rendered sidebar width in px; a hidden drawer retains its expanded width. */
   width: number
+  /** Present the retained sidebar content as an overlay drawer. */
+  drawer: boolean
 }
 
 /** Right column owner share: resolved normal geometry and opening eligibility. */
@@ -239,11 +243,21 @@ export const inject = ['slots', 'theme', 'locale', 'shortcuts']
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register('shortcuts.layout', { zh: shortcutZh, en: shortcutEn }), 'layout: command labels')
+  ctx.effect(() => ctx.locale.register('shortcuts.layout', { zh, en, ja, es, fr, de, ru, pt }), 'layout: command labels')
   ctx.effect(() => ctx.locale.register('workbench', { zh: workbenchZh, en: workbenchEn }), 'layout: workbench chrome')
   const t = ctx.locale.bind('shortcuts.layout')
 
   ctx.effect(() => {
+    // Headless profiles can instantiate client registrations without browser media APIs.
+    const query = typeof matchMedia === 'function'
+      ? matchMedia('(device-posture: folded) and (orientation: landscape)') : undefined
+    const foldedLandscape: HostObservable<boolean> = {
+      getSnapshot: () => query?.matches ?? false,
+      subscribe: (listener) => {
+        query?.addEventListener('change', listener)
+        return () => { query?.removeEventListener('change', listener) }
+      },
+    }
     const handle = createLayoutStore()
     const instance = handle.create()
     const store: typeof handle = { ...handle, create: () => instance }
@@ -327,6 +341,7 @@ export function apply(ctx: ClientContext): void {
         'shell.leading': { kind: 'single', scope: 'root' },
       },
       store,
+      inject: (): AppFrameInjected => ({ hooks: { foldedLandscape } }),
     }, AppFrame)
     // The frame's chrome seats are this package's own occupants, registered the
     // way any plugin would: the activity bar declares the glyph list and the
@@ -365,8 +380,10 @@ export function apply(ctx: ClientContext): void {
         'web:macos': { code: 'KeyB', modifiers: ['primary', 'alt'] },
         'web:windows': { code: 'KeyB', modifiers: ['primary', 'alt'] },
       },
-      regions: ['page', 'editable'], modals: [],
-      resolve: () => ({ status: 'handled', run: () => { layout.toggleSidebar() } }),
+      regions: ['page', 'editable'], modals: ['sidebar'],
+      resolve: ({ modal }) => modal !== null && modal !== 'sidebar'
+        ? { status: 'pass' }
+        : { status: 'handled', run: () => { layout.toggleSidebar() } },
     })
     const disposePanels = ctx.slots.subscribe('main', retainMainPanels)
     retainMainPanels()
@@ -389,6 +406,7 @@ export function apply(ctx: ClientContext): void {
   // state through the getter once, then event-driven only; no React path.
   ctx.effect(() => {
     const presenter = new ThemePresenter()
+    presenter.start()
     presenter.apply(ctx.theme.getTheme())
     const off = ctx.on('theme/change', (snapshot) => { presenter.apply(snapshot) })
     return () => {

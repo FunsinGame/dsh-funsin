@@ -1,5 +1,5 @@
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { SessionStatus, SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SessionStatus, SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type { WorkspaceId, WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { describe, expect, it } from 'vitest'

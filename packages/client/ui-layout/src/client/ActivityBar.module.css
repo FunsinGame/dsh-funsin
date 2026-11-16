@@ -55,9 +55,11 @@
   cursor: pointer;
 }
 
-.entry:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .entry:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .entry.entryActive {

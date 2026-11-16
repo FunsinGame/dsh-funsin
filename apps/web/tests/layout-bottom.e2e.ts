@@ -68,7 +68,11 @@ it('reserves bottom content height without remounting it on activity navigation'
           bottom: viewportHeight - result.statusbar.height - height,
         }
         expect(result.main).toEqual(columns)
-        expect(result.sidebar).toEqual(columns)
+        // Below the drawer breakpoint the sidebar overlays the content area, so
+        // its absolute box spans the whole frame instead of the workbench row.
+        const contentWidth = page.viewportSize()!.width - result.railWidth
+        expect(result.sidebar).toEqual(contentWidth < 768
+          ? { top: 0, height: viewportHeight, bottom: viewportHeight } : columns)
         expect(result.rightbar).toEqual(columns)
         // The activity rail is frame chrome beside the tab strip: a fixed 48px
         // track from below the brand band down to the columns' bottom.

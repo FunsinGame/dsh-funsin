@@ -13,8 +13,16 @@ afterEach(() => { cleanup() })
 
 function snapshot(items: readonly { workspaceId: string; title: string }[]): WorkspaceSnapshot {
   return {
-    items, archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
-  } as unknown as WorkspaceSnapshot
+    items: items.map(({ workspaceId, title }) => ({
+      workspaceId: workspaceId as WorkspaceId,
+      path: `/work/${workspaceId}`,
+      title,
+      sessionIds: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    })),
+    archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+  }
 }
 
 function mount(items: readonly { workspaceId: string; title: string }[], current: string | undefined) {

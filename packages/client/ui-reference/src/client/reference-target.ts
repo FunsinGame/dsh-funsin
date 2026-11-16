@@ -53,10 +53,12 @@ export function parseFileReferenceTarget(ref: string): FileReferenceTarget | und
  * @param path - file path as authored in the mention.
  * @param line - optional 1-based first line.
  * @param endLine - optional 1-based last line.
- * @returns the path's final segment plus `:line` or `:start-end`.
+ * @returns the path's final segment plus `:line` or `:start-end`, or an empty
+ *   string when the path has no final segment (a bare root), leaving the
+ *   caller to display the authored spelling.
  */
 export function fileReferenceLabel(path: string, line?: number, endLine?: number): string {
-  const name = path.split(/[\\/]/u).filter(Boolean).at(-1) ?? path
+  const name = path.split(/[\\/]/u).filter(Boolean).at(-1) ?? ''
   if (line === undefined) return name
   const end = endLine ?? line
   return end === line ? `${name}:${String(line)}` : `${name}:${String(line)}-${String(end)}`

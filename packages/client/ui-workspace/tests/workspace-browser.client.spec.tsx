@@ -1,20 +1,26 @@
 // @vitest-environment jsdom
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { allowAllAccess, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { act, cleanup, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  allowAllAccess, bindSnapshotSelector, contextMenuHook, makeTranslate,
+} from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
   WorkspaceId, WorkspaceSnapshot, WorkspaceView,
 } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
-import type { DirectoryFlowOwnerProps, WorkspaceBrowserProps } from '../src/client/contract/slots.ts'
+import type {
+  DirectoryFlowOwnerProps, WorkspaceActionRequest, WorkspaceBrowserProps,
+} from '../src/client/contract/slots.ts'
 import { createWorkspaceShortcutControls } from '../src/client/shortcuts.ts'
 import { createWorkspaceViewStore } from '../src/client/stores.ts'
 import { WorkspaceBrowser } from '../src/client/rows/WorkspaceBrowser.tsx'
 import { zh } from '../src/client/locales.ts'
+import { renderMenuButton } from './menu-button.tsx'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
@@ -89,8 +95,8 @@ function fireDrag(row: HTMLElement, kind: 'dragOver' | 'drop', clientY: number):
   fireEvent(row, event)
 }
 
-function dragData(): Pick<DataTransfer, 'effectAllowed' | 'dropEffect' | 'setData'> {
-  return { effectAllowed: 'uninitialized', dropEffect: 'none', setData: vi.fn() }
+function dragData(): Pick<DataTransfer, 'effectAllowed' | 'dropEffect' | 'setData' | 'setDragImage'> {
+  return { effectAllowed: 'uninitialized', dropEffect: 'none', setData: vi.fn(), setDragImage: vi.fn() }
 }
 
 /** Row bounding box so a drop can resolve its half without layout. */
@@ -110,9 +116,24 @@ function rowTexts(): (string | null)[] {
   return screen.queryAllByRole('treeitem').map(row => row.textContent)
 }
 
+// Mounted outside a sidebar, the browser binds its list area to nothing.
+const SECTION_SCROLLER = { bindScrollerRef: () => {} }
+
 function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
   const controls = createWorkspaceShortcutControls()
   const store = createWorkspaceViewStore().create()
+  const request = createSnapshotStore<WorkspaceActionRequest | null>(null)
+  /** The apply closure's own request callback: the Host answer gates it, the store carries it. */
+  function requestWorkspaceAction(
+    workspaceId: WorkspaceId,
+    displayTitle: string,
+    action: WorkspaceActionRequest['action'],
+  ): void {
+    const storedTitle = props.useWorkspaces(
+      state => state.items.find(row => row.workspaceId === workspaceId)?.title ?? displayTitle,
+    )
+    act(() => { request.set({ action, workspaceId, displayTitle, storedTitle }) })
+  }
   const props: WorkspaceBrowserProps = {
     useShortcuts: select => select([]),
     useWorkspaceShortcuts: bindSnapshotSelector(controls.state),
@@ -125,22 +146,37 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     useSessionStatus: hook(noPendingInteraction),
     useSessionRetainInfo: () => undefined,
     usePanelInfo, useResource,
+    useContextMenu: contextMenuHook(),
+    useContextMenuTarget: selector => selector(null),
     useWorkspaces: hook(workspaceState([])),
     ...allowAllAccess,
     useStore: bindSnapshotSelector(store),
+    useSectionScroller: () => SECTION_SCROLLER,
+    useHostInfo: selector => selector({ home: undefined, isLoopback: true }),
+    useWorkspaceActionRequest: bindSnapshotSelector(request),
+    settleWorkspaceAction: () => { request.set(null) },
+    requestWorkspaceAction,
     actions: store.actions,
     open: vi.fn(),
     searchSessions: vi.fn(async () => ({ items: [], hasMore: false })),
     searchResultLimit: 20,
     notifyArchivedNotOpenable: vi.fn(),
     renameWorkspace: vi.fn(async () => {}),
+    deleteWorkspace: vi.fn(async () => {}),
     unarchiveSession: vi.fn(async () => {}),
     renderSlot: renderSlotStub,
+    renderFactorySlot: renderMenuButton,
     t,
     ...overrides,
   }
   const view = render(<WorkspaceBrowser {...props} />)
-  return { view, props, store, controls }
+  return {
+    view, props, store, controls, request,
+    /** Raise the shared Workspace dialog the header verb asks for. */
+    openDialog: (workspaceId: WorkspaceId, displayTitle: string, action: WorkspaceActionRequest['action']) => {
+      requestWorkspaceAction(workspaceId, displayTitle, action)
+    },
+  }
 }
 
 /** Re-render with (possibly) changed props — WorkspaceBrowser has no side channel. */
@@ -334,7 +370,12 @@ describe('WorkspaceBrowser', () => {
   it('asks for a Session rename from a title double-click', () => {
     const requestSessionRename = vi.fn()
     mountWorkspace([summary('one', 1)], { overrides: { requestSessionRename } })
-    fireEvent.doubleClick(screen.getByText('one'))
+    // The row arms the rename on a detail-1 press since the window last lost
+    // focus, then fires on the double-click; a bare dblclick is not enough.
+    const title = screen.getByText('one')
+    fireEvent.mouseDown(title, { detail: 1 }); fireEvent.mouseUp(title, { detail: 1 }); fireEvent.click(title, { detail: 1 })
+    fireEvent.mouseDown(title, { detail: 2 }); fireEvent.mouseUp(title, { detail: 2 }); fireEvent.click(title, { detail: 2 })
+    fireEvent.doubleClick(title)
     expect(requestSessionRename).toHaveBeenCalledWith('one', 'one')
   })
 
@@ -458,5 +499,95 @@ describe('WorkspaceBrowser', () => {
     expect(screen.getByText('已存在名为“Beta”的工作区。')).toBeTruthy()
     expect(screen.getByRole('button', { name: '重命名' }).hasAttribute('disabled')).toBe(true)
     expect(renameWorkspace).not.toHaveBeenCalled()
+  })
+  it('renders row actions inline while Session menus belong to the global overlay', () => {
+    const rendered = vi.fn()
+    const renderSlot: WorkspaceBrowserProps['renderSlot'] = (name: string, owner: object) => {
+      rendered(name, owner)
+      return null
+    }
+    mount({
+      useSessions: hook(sessionState([summary('alpha-s', 1)])),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['alpha-s'])])),
+      renderSlot,
+    })
+    // The menu is the context-menu overlay's content, so the browser must not
+    // render the legacy menu list itself; only the hover-button list is inline.
+    expect(rendered).not.toHaveBeenCalledWith('sidebar.workspaces.session.menu.item', expect.anything())
+    expect(rendered).toHaveBeenCalledWith(
+      'sidebar.workspaces.session.row.action', { sessionId: sid('alpha-s'), displayTitle: 'alpha-s' },
+    )
+  })
+
+  it('confirms Workspace deletion, explains retention, and blocks duplicate submission', async () => {
+    let resolveDelete!: () => void
+    const deleteWorkspace = vi.fn(() => new Promise<void>((resolve) => { resolveDelete = resolve }))
+    const browser = mount({
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['session'], 'Alpha')])),
+      deleteWorkspace,
+    })
+    browser.openDialog(wid('alpha'), 'Alpha', 'delete')
+    const dialog = screen.getByRole('dialog', { name: '删除工作区' })
+    expect(dialog.textContent).toContain('将把“Alpha”从工作区列表中移除')
+    expect(dialog.textContent).toContain('文件夹与会话记录会保留')
+
+    const confirm = screen.getByRole<HTMLButtonElement>('button', { name: '删除工作区' })
+    fireEvent.click(confirm)
+    fireEvent.click(confirm)
+    expect(deleteWorkspace).toHaveBeenCalledOnce()
+    expect(deleteWorkspace).toHaveBeenCalledWith(wid('alpha'))
+    expect(confirm.disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: '取消' }).disabled).toBe(true)
+    expect(screen.getByRole('status').textContent).toBe('正在删除工作区…')
+    await act(async () => { resolveDelete() })
+    // RPC success alone does not close: the dialog waits until the
+    // useWorkspaces projection has committed the removal.
+    expect(screen.getByRole('dialog', { name: '删除工作区' })).toBeTruthy()
+    rerender(browser, { useWorkspaces: hook(workspaceState([])) })
+    expect(screen.queryByRole('dialog', { name: '删除工作区' })).toBeNull()
+  })
+
+  it('keeps the delete dialog open on failure and allows retry or cancellation', async () => {
+    const deleteWorkspace = vi.fn()
+      .mockRejectedValueOnce(new Error('storage unavailable'))
+      .mockRejectedValueOnce('denied')
+    const browser = mount({
+      useWorkspaces: hook(workspaceState([workspace('alpha', [], 'Alpha')])),
+      deleteWorkspace,
+    })
+    browser.openDialog(wid('alpha'), 'Alpha', 'delete')
+    fireEvent.click(screen.getByRole('button', { name: '删除工作区' }))
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('storage unavailable') })
+    expect(screen.getByRole('dialog', { name: '删除工作区' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '删除工作区' }))
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('denied') })
+    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+    expect(screen.queryByRole('dialog', { name: '删除工作区' })).toBeNull()
+  })
+
+  it('Cancel, Escape, and Close dismiss deletion without calling the action', () => {
+    const deleteWorkspace = vi.fn(async () => {})
+    const browser = mount({
+      useWorkspaces: hook(workspaceState([workspace('alpha', [], 'Alpha')])),
+      deleteWorkspace,
+    })
+    browser.openDialog(wid('alpha'), 'Alpha', 'delete')
+    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+    browser.openDialog(wid('alpha'), 'Alpha', 'delete')
+    fireEvent.keyDown(document, { key: 'Escape' })
+    browser.openDialog(wid('alpha'), 'Alpha', 'delete')
+    fireEvent.click(screen.getByRole('button', { name: '关闭' }))
+    expect(deleteWorkspace).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog', { name: '删除工作区' })).toBeNull()
+  })
+
+  it('search hides drag affordances (rows are not draggable during search)', () => {
+    mount({
+      useSessions: hook(sessionState([summary('needle-a', 2, { displayTitle: 'Needle A' })])),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['needle-a'])])),
+    })
+    fireEvent.change(screen.getByPlaceholderText('搜索会话名称'), { target: { value: 'needle' } })
+    const row = screen.getByText('Needle A').closest('[role="treeitem"]') as HTMLElement
+    expect(row.hasAttribute('draggable')).toBe(false)
   })
 })

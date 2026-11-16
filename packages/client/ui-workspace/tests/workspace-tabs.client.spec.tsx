@@ -2,7 +2,7 @@
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react'
-import { allowAllAccess, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, bindSnapshotSelector, contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { WorkspaceId, WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { DirectoryFlowOwnerProps, WorkspaceTabsProps } from '../src/client/contract/slots.ts'
@@ -70,7 +70,7 @@ function mount(overrides: Partial<WorkspaceTabsProps> = {}) {
     useSessions: hook({ ids: [], byId: {}, phase: 'ready', projectionsBySession: {} }),
     useSessionStatus: hook(new Map()),
     useSessionRetainInfo: () => undefined,
-    usePanelInfo, useResource,
+    usePanelInfo, useResource, useContextMenu: contextMenuHook(),
     ...allowAllAccess,
     selectWorkspace: vi.fn(),
     reorderWorkspace: vi.fn(async () => {}),
@@ -130,7 +130,7 @@ describe('WorkspaceTabs', () => {
     expect(alpha!.querySelector('[data-state="done"]')).not.toBeNull()
     expect(alpha!.textContent).toContain('已完成')
     expect(beta!.querySelector('[data-state="error"]')).not.toBeNull()
-    expect(beta!.textContent).toContain('执行失败')
+    expect(beta!.textContent).toContain('运行出错')
     expect(gamma!.querySelector('[data-state]')).toBeNull()
   })
 

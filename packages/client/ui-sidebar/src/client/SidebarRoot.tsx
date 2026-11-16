@@ -5,10 +5,16 @@
  * while the sliding column (AppFrame grid tracks) clips it — nothing reflows
  * mid-slide. At settle the wide-only content unmounts and the upper
  * controls enter the 56px rail from the same horizontal offset (one icon each,
- * same top-down order) on one fade that ends with the slide. The
- * workspace/session browsing region below the controls is the
- * `sidebar.workspaces` registrant's; the foot keeps the `sidebar.settings` and
- * `sidebar.footer.action` seats the shell hands the wide flag.
+ * same top-down order) on one fade that ends with the slide. The bottom-pinned
+ * settings control only fades. The workspace/session browsing region between
+ * global panel rows and the foot is the `sidebar.workspaces` registrant's,
+ * and the foot holds `sidebar.settings` plus `sidebar.footer.action`; the shell
+ * hands them the wide flag (plus an expand request callback for the browser).
+ * Through the browser's hookContext, the shell also hands it the scroller hook
+ * that continues wheel scrolling over the sidebar viewport into its list.
+ *
+ * On a narrow frame the column is an overlay drawer (AppFrame decides): it
+ * keeps its expanded content while closed and traps focus while open.
  *
  * The wordmark is not here: it lives in the frame's brand band (FrameBrand), so
  * switching the activity rail never takes it away.
@@ -18,15 +24,20 @@
  * scrollbar indirection away while it is elsewhere, so a list the user is not
  * pointing at carries no bar.
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  IconNewChatOutlineMedium, IconNewChatOutlineRegular, IconPanelLeftOutlineRegular, isDarwinDesktop, ShortcutKeys, Tooltip,
+  IconAppsAddOutlineRegular, IconNewChatOutlineMedium, IconNewChatOutlineRegular,
+  IconPanelLeftOutlineRegular, IconPinFillRegular, focusWithoutRing, isBehindModal, isDarwinDesktop, Menu, ShortcutKeys,
+  Tooltip, useModalLayer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsRenderFactories, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
-  SidebarPanelMetadata, SidebarRootComponentProps, SidebarRootInjected, SidebarSectionOwnerProps,
+  SidebarPanelActionsOwnerProps, SidebarPanelMetadata, SidebarRootComponentProps, SidebarRootInjected, SidebarSectionHookContext,
+  SidebarSectionOwnerProps,
 } from './contract/slots.ts'
+import { FIXED_PANEL_ID } from './panel-pins.ts'
+import { createScrollHandoff } from './scroll-handoff.ts'
 import css from './SidebarRoot.module.css'
 
 /** Wide-content unmount delay; matches the 150ms wide-content fade-out. */
@@ -44,31 +55,87 @@ type PanelRowProps =
   Pick<SidebarPanelMetadata, 'id' | 'label'>
   & Pick<SidebarSectionOwnerProps, 'wide'>
   & Pick<PropsRuntime<'sidebar'>, 'usePanelInfo'>
-  & Pick<InjectFace<SidebarRootInjected>, 'selectPanel'>
-  & PropsRenderSlots<'sidebar.panellist'>
+  & Pick<InjectFace<SidebarRootInjected>, 'selectPanel' | 'trackEntryClick' | 'setPinned'>
+  & { readonly unpinLabel: string; readonly unpinTooltip: string; readonly canUnpin: boolean }
+  & PropsRenderFactories
+
+/** Analytics category of an official panel; other panels are never reported. */
+function officialEntry(id: string): 'plugin' | 'cron' | undefined {
+  if (id === 'plugins') return 'plugin'
+  return id === 'schedules' ? 'cron' : undefined
+}
 
 /** Each panel row subscribes only to its own selection state. */
-function PanelRow({ id, label, wide, usePanelInfo, selectPanel, renderSlot }: PanelRowProps) {
+function PanelRow({
+  id, label, wide, unpinLabel, unpinTooltip, canUnpin, usePanelInfo, selectPanel, setPinned, trackEntryClick, renderFactorySlot,
+}: PanelRowProps) {
   const active = usePanelInfo(info => info.activePanelId === id)
   return (
-    <Tooltip label={label} delayMs={500} disabled={wide}>
-      <button
-        type="button"
-        className={clsx(css.panelRow, active && css.panelActive)}
-        aria-label={label}
-        aria-current={active ? 'page' : undefined}
-        onClick={() => { selectPanel(id) }}
-      >
-        <span className={css.panelGlyph} aria-hidden="true">
-          {renderSlot('sidebar.panellist', { size: wide ? 16 : 18, active }, { only: id })}
-        </span>
-        {wide && (
-          <span className={clsx(css.panelTitle, css.wide)}>
-            {label}
+    <div className={clsx(css.panelEntry, wide && css.panelEntryWide, active && css.panelEntryActive)}>
+      <Tooltip label={label} delayMs={500} disabled={wide}>
+        <button
+          type="button"
+          className={css.panelRow}
+          aria-label={label}
+          aria-current={active ? 'page' : undefined}
+          onClick={() => {
+            const entry = officialEntry(id)
+            if (entry !== undefined) trackEntryClick({ menu_name: entry, position: 'sidebar' })
+            selectPanel(id)
+          }}
+        >
+          <span className={css.panelGlyph} aria-hidden="true">
+            {renderFactorySlot('sidebar.panel.icon', { id, size: wide ? 16 : 18, active })}
           </span>
-        )}
-      </button>
-    </Tooltip>
+          {wide && (
+            <span className={clsx(css.panelTitle, css.wide)}>
+              {label}
+            </span>
+          )}
+        </button>
+      </Tooltip>
+      {wide && canUnpin && <Tooltip label={unpinTooltip} side="bottom" align="end" delayMs={500} portal>
+        <button type="button" className={css.panelUnpin} aria-label={unpinLabel} onClick={(event) => {
+          // Unpin is rendered only while this navigation also renders More.
+          const navigation = event.currentTarget.closest('nav') as HTMLElement
+          const more = navigation.querySelector('button[aria-haspopup="menu"]') as HTMLButtonElement
+          focusWithoutRing(more)
+          setPinned(id, false)
+        }}>
+          <IconPinFillRegular size={14} />
+        </button>
+      </Tooltip>}
+    </div>
+  )
+}
+
+type PanelMoreMenuProps =
+  Pick<SidebarSectionOwnerProps, 'wide'>
+  & Omit<SidebarPanelActionsOwnerProps, 'onDismiss'>
+  & PropsRenderSlots<'sidebar.panellist.actions'>
+  & Pick<InjectFace<SidebarRootInjected>, 'trackEntryClick'>
+  & { readonly label: string }
+
+/** The panel list's More launcher: a panel-row button whose menu rows come from `sidebar.panellist.actions`. */
+function PanelMoreMenu({ wide, label, entries, onOpen, onPinnedChange, trackEntryClick, renderSlot }: PanelMoreMenuProps) {
+  const [open, setOpen] = useState(false)
+  const onDismiss = (): void => { setOpen(false) }
+  return (
+    <Menu open={open} onClose={onDismiss} portal autoFocus className={css.moreAnchor} listClassName={css.moreMenu}
+      anchor={(
+        <Tooltip label={label} delayMs={500} disabled={wide}>
+          <button type="button" className={css.panelRow} aria-label={label} aria-haspopup="menu" aria-expanded={open}
+            onClick={() => {
+              trackEntryClick({ menu_name: 'more', position: 'sidebar' })
+              setOpen(value => !value)
+            }}>
+            <span className={css.panelGlyph} aria-hidden="true"><IconAppsAddOutlineRegular size={wide ? 16 : 18} /></span>
+            {wide && <span className={clsx(css.panelTitle, css.wide)}>{label}</span>}
+          </button>
+        </Tooltip>
+      )}>
+      {renderSlot('sidebar.panellist.actions', { entries, onOpen, onPinnedChange, onDismiss })}
+    </Menu>
   )
 }
 
@@ -80,29 +147,51 @@ function PanelRow({ id, label, wide, usePanelInfo, selectPanel, renderSlot }: Pa
 export function SidebarRoot({
   collapsed,
   width,
+  drawer,
   startSession,
   toggleSidebar,
   selectPanel,
+  setPinned,
+  trackEntryClick,
+  useRemoteAccess,
   usePanels,
+  useEntryPins,
+  useEntryActions,
   useShortcuts,
   usePanelInfo,
   t,
   renderSlot,
+  renderFactorySlot,
 }: SidebarRootComponentProps) {
   const panels = usePanels(snapshot => snapshot)
+  const unpinned = useEntryPins(ids => ids)
+  const activePanelId = usePanelInfo(info => info.activePanelId)
+  const hasEntryActions = useEntryActions(registered => registered)
   const shortcut = useShortcuts(rows => rows.find(row => row.id === 'sidebar.left.toggle'))
   const newShortcut = useShortcuts(rows => rows.find(row => row.id === 'session.new'))
+  // A page whose access snapshot excludes starting a Session offers no New Session affordance.
+  const canStartSession = useRemoteAccess('session/create')
   const toggleLabel = collapsed ? t('toggle.open') : t('toggle.collapse')
   // Wide content stays mounted while the collapse animates (fading via
   // .collapsed .wide), unmounts at settle, and remounts right away on expand.
+  // A closed drawer retains its content with the rail phase already settled.
   const [settled, setSettled] = useState(collapsed)
   useEffect(() => {
-    if (!collapsed) { setSettled(false); return }
+    if (drawer || !collapsed) { setSettled(collapsed); return }
     const timer = window.setTimeout(() => { setSettled(true) }, COLLAPSE_SETTLE_MS)
     return () => { window.clearTimeout(timer) }
-  }, [collapsed])
+  }, [collapsed, drawer])
   const windowsTitlebar = document.documentElement.hasAttribute('data-windows-titlebar')
-  const wide = windowsTitlebar ? !collapsed : !collapsed || !settled
+  const wide = drawer || (windowsTitlebar ? !collapsed : !collapsed || !settled)
+  const [scrollHandoff] = useState(createScrollHandoff)
+  const sectionHookContext = useMemo<SidebarSectionHookContext>(
+    () => ({ useSectionScroller: scrollHandoff.useSectionScroller }), [scrollHandoff],
+  )
+  // The Windows titlebar hosts the New Session controls while the sidebar is collapsed.
+  const openNewSession = (): void => {
+    trackEntryClick({ menu_name: 'new_session', position: windowsTitlebar && collapsed ? 'titlebar' : 'sidebar' })
+    startSession()
+  }
   // The Windows caption menus occupy the strip to the right of these controls
   // (that is what --dsh-windows-menu-start reserves), so a right-side bubble
   // lands under their text. Below the caption is the only clear side.
@@ -111,18 +200,29 @@ export function SidebarRoot({
   // && wide): the sliding column then clips it instead of reflowing it. The
   // rail layout (.collapsed styles) only applies once the fade settles.
   const lastWideWidth = useRef(width)
-  if (!collapsed) lastWideWidth.current = width
+  if (drawer || !collapsed) lastWideWidth.current = width
 
-  // Rail-in only crossfades a live collapse: a refresh straight into the
-  // collapsed state renders the rail statically (no delay-hidden icons).
-  const everWide = useRef(!collapsed)
-  if (!collapsed) everWide.current = true
+  // A closed drawer returns to the static rail; only a live collapse fades it in.
+  const animateRail = useRef(!collapsed)
+  if (drawer || !collapsed) animateRail.current = !collapsed
 
   // Scrollbars in the column follow the pointer (.quietBars rebinds them
   // away): drawn while it is inside, and for SCROLLBAR_LINGER_MS after it
   // leaves. A pointer that returns within that window cancels the pending
   // hide rather than restarting from a hidden bar.
   const column = useRef<HTMLDivElement>(null)
+  const sidebarFocus = useRef<Element | null>(null)
+  useModalLayer(column, drawer && !collapsed, toggleSidebar)
+  useLayoutEffect(() => {
+    if (!collapsed) return
+    const controlled = sidebarFocus.current?.getAttribute('aria-controls')?.split(/\s+/) ?? []
+    const ownsMenuFocus = controlled.some(id => document.getElementById(id)?.contains(document.activeElement))
+    if (sidebarFocus.current !== document.activeElement && !ownsMenuFocus) return
+    const opener = drawer
+      ? column.current?.ownerDocument.querySelector<HTMLElement>('[data-sidebar-opener]')
+      : column.current?.querySelector<HTMLElement>('[data-sidebar-toggle]')
+    if (opener != null && !isBehindModal(opener)) focusWithoutRing(opener, { preventScroll: true })
+  }, [drawer, collapsed])
   const [pointerInside, setPointerInside] = useState(false)
   const lingerTimer = useRef<number | undefined>(undefined)
   const armLinger = (): void => {
@@ -178,8 +278,10 @@ export function SidebarRoot({
   }, [windowsTitlebar, collapsed])
   // Rail resting state is the panel icon; expanded it is the same glyph.
   const toggle = (
-    <Tooltip label={toggleLabel} shortcutKeys={shortcut?.keys} delayMs={500} side={captionTooltipSide}>
+    <Tooltip label={toggleLabel} shortcutKeys={shortcut?.keys} delayMs={500} side={captionTooltipSide} portal={drawer}>
       <button
+        data-sidebar-toggle
+        data-modal-autofocus={drawer || undefined}
         type="button"
         className={clsx(css.iconButton, css.toggle)}
         aria-label={toggleLabel}
@@ -196,11 +298,17 @@ export function SidebarRoot({
   return (
     <div
       ref={column}
+      onFocusCapture={(event) => { sidebarFocus.current = event.target }}
+      role={drawer ? 'dialog' : undefined}
+      data-shortcut-modal={drawer ? 'sidebar' : undefined}
+      aria-modal={drawer && !collapsed ? true : undefined}
+      aria-label={drawer ? t('navigation.label') : undefined}
+      tabIndex={drawer ? -1 : undefined}
       className={clsx(
-        css.root, !wide && css.collapsed, !wide && everWide.current && css.railIn,
-        collapsed && wide && css.fading, !pointerInside && css.quietBars,
+        css.root, !wide && css.collapsed, !wide && animateRail.current && css.railIn,
+        !drawer && collapsed && wide && css.fading, !pointerInside && css.quietBars,
       )}
-      style={wide ? { width: collapsed ? lastWideWidth.current : width } : undefined}
+      style={wide ? { width: !drawer && collapsed ? lastWideWidth.current : width } : undefined}
       onPointerEnter={() => {
         cancelLinger()
         setPointerInside(true)
@@ -217,49 +325,85 @@ export function SidebarRoot({
       </div>
 
       {/* The label fades before the hover/focus shortcut, including on translucent backgrounds. */}
-      <Tooltip label={t('session.new.label')} shortcutKeys={newShortcut?.keys} delayMs={500} side={captionTooltipSide} disabled={wide}>
-        <button
-          type="button"
-          className={css.newSession}
-          aria-label={t('session.new.label')}
-          aria-keyshortcuts={newShortcut?.aria}
-          onClick={() => { startSession() }}
-        >
-          <span className={css.newSessionLabelMask}><span className={css.newSessionContent}>
-            {wide
-              ? <IconNewChatOutlineMedium size={14} />
-              : <IconNewChatOutlineRegular size={windowsTitlebar ? 16 : 18} />}
-            {wide && <span className={clsx(css.newSessionLabel, css.wide)}>{t('session.new')}</span>}
-          </span></span>
-          {wide && newShortcut !== undefined && newShortcut.keys.length > 0 && <span className={css.newSessionShortcut} aria-hidden="true">
-            <ShortcutKeys keys={newShortcut.keys} />
-          </span>}
-        </button>
-      </Tooltip>
-
-      {panels.length > 0 && (
-        <nav className={css.panelList} aria-label={t('panels.label')}>
-          {panels.map(({ id, label }) => (
-            <PanelRow
-              key={id}
-              id={id}
-              label={label}
-              wide={wide}
-              usePanelInfo={usePanelInfo}
-              selectPanel={selectPanel}
-              renderSlot={renderSlot}
-            />
-          ))}
-        </nav>
+      {canStartSession && (
+        <div className={css.newSessionRow}>
+          {renderSlot('sidebar.session.action', { wide }, {
+            children: (
+              <Tooltip label={t('session.new.label')} shortcutKeys={newShortcut?.keys} delayMs={500} side={captionTooltipSide} disabled={wide}>
+                <button
+                  type="button"
+                  className={css.newSession}
+                  aria-label={t('session.new.label')}
+                  aria-keyshortcuts={newShortcut?.aria}
+                  onClick={openNewSession}
+                >
+                  <span className={css.newSessionLabelMask}><span className={css.newSessionContent}>
+                    {wide
+                      ? <IconNewChatOutlineMedium size={14} />
+                      : <IconNewChatOutlineRegular size={windowsTitlebar ? 16 : 18} />}
+                    {wide && <span className={clsx(css.newSessionLabel, css.wide)}>{t('session.new')}</span>}
+                  </span></span>
+                  {wide && newShortcut !== undefined && newShortcut.keys.length > 0 && <span className={css.newSessionShortcut} aria-hidden="true">
+                    <ShortcutKeys keys={newShortcut.keys} />
+                  </span>}
+                </button>
+              </Tooltip>
+            ),
+          })}
+        </div>
       )}
 
-      {/* The browsing region fills the column between the controls and the
-          foot in both states; its rail icon column rides the same slot. */}
-      <div className={css.regionArea}>
-        {renderSlot('sidebar.workspaces', {
-          wide,
-          expandSidebar: () => { if (collapsed) toggleSidebar() },
-        })}
+      <div className={css.scrollRegion}>
+        <div
+          ref={scrollHandoff.bindViewportRef}
+          className={css.scrollArea}
+          data-sidebar-scrollport={wide ? '' : undefined}
+        >
+          {panels.length > 0 && (
+            <nav className={css.panelList} aria-label={t('panels.label')}>
+              {panels.filter(({ id }) => id === FIXED_PANEL_ID || !hasEntryActions || !unpinned.includes(id)).map(({ id, label }) => (
+                <PanelRow
+                  key={id}
+                  id={id}
+                  label={label}
+                  wide={wide}
+                  unpinLabel={t('panels.unpin', { name: label })}
+                  unpinTooltip={t('panels.unpinTooltip')}
+                  canUnpin={hasEntryActions && id !== FIXED_PANEL_ID}
+                  setPinned={setPinned}
+                  usePanelInfo={usePanelInfo}
+                  selectPanel={selectPanel}
+                  trackEntryClick={trackEntryClick}
+                  renderFactorySlot={renderFactorySlot}
+                />
+              ))}
+              {hasEntryActions && (
+                <PanelMoreMenu
+                  wide={wide}
+                  label={t('panels.more')}
+                  entries={panels.filter(({ id }) => id !== FIXED_PANEL_ID)
+                    .map(({ id, label }) => ({ id, label, pinned: !unpinned.includes(id), active: id === activePanelId }))}
+                  onOpen={(id) => {
+                    const entry = officialEntry(id)
+                    if (entry !== undefined) trackEntryClick({ menu_name: entry, position: 'sidebar_more' })
+                    const panel = panels.find(candidate => candidate.id === id)
+                    if (panel !== undefined) selectPanel(panel.id)
+                  }}
+                  onPinnedChange={setPinned}
+                  trackEntryClick={trackEntryClick}
+                  renderSlot={renderSlot}
+                />
+              )}
+            </nav>
+          )}
+          <div className={css.regionArea}>
+            {renderSlot('sidebar.workspaces', {
+              wide,
+              expandSidebar: () => { if (collapsed) toggleSidebar() },
+            }, { hookContext: sectionHookContext })}
+          </div>
+        </div>
+        <span className={css.scrollFade} aria-hidden="true" />
       </div>
 
       {/* Footer actions stack above Settings in both sidebar widths. */}

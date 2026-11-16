@@ -30,12 +30,14 @@ function nextPath(text: string, from: number, folder: boolean) {
     const target = parseFileReferenceTarget(raw)
     if (target === undefined) continue
     if (target.path.endsWith('/') !== folder) continue
+    const name = fileReferenceLabel(target.path, target.line, target.endLine)
     return {
       start: match.index,
       end: match.index + raw.length,
       data: {
         path: target.path,
-        label: fileReferenceLabel(target.path, target.line, target.endLine),
+        // A bare root has no final segment; show the spelling the user wrote.
+        label: name === '' ? raw.slice(1) : name,
         ...(target.line === undefined ? {} : { line: target.line }),
         ...(target.endLine === undefined ? {} : { endLine: target.endLine }),
       },
